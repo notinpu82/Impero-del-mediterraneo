@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mercanti del Mediterraneo</title>
+<style>
+:root{--bg:#0e1b26;--card:#162a3a;--ink:#e8eef2;--mut:#8fa6b6;--gold:#e0b252;--line:#27465c;--ok:#6fcf97;--bad:#f2837a;--btn:#21465f}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:104px 10px 74px}
+h2{font:600 20px Georgia,serif;margin:6px 0 10px;color:var(--gold)}
+header{position:fixed;top:0;left:0;right:0;background:#0a141c;border-bottom:1px solid var(--line);padding:8px 12px;z-index:5}
+#top{font:600 17px Georgia,serif;color:var(--gold);display:flex;justify-content:space-between;gap:8px}
+.days{display:flex;gap:6px;margin-top:6px}
+.days button{flex:1}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0a141c;border-top:1px solid var(--line);z-index:5}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 2px;font-size:13px}
+nav button.on{color:var(--gold);box-shadow:inset 0 3px 0 var(--gold)}
+button,select{font:inherit;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+button:active{background:var(--line)}
+button.on{background:var(--gold);color:#1a1405;border-color:var(--gold)}
+select{width:100%;margin:4px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.r{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.b{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.b button{flex:1;min-width:84px}
+small,.m{color:var(--mut)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);margin-bottom:10px}
+table{border-collapse:collapse;font-size:13px;width:100%}
+td,th{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right}
+th{color:var(--mut);font-weight:500}
+td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+.lo{color:var(--ok);font-weight:700}.hi{color:var(--bad);font-weight:700}
+#toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);background:var(--gold);color:#1a1405;padding:8px 14px;border-radius:20px;opacity:0;transition:opacity .2s;z-index:9;max-width:90%;text-align:center;pointer-events:none}
+.log p{margin:0;padding:6px 0;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header><div id="top"></div><div class="days"><button onclick="adv(1)">+1 giorno</button><button onclick="adv(7)">+7 giorni</button><button onclick="adv(30)">+30 giorni</button></div></header>
+<main id="main"></main>
+<div id="toast"></div>
+<nav>
+<button data-t="porto" onclick="go('porto')">Porto</button>
+<button data-t="navi" onclick="go('navi')">Navi</button>
+<button data-t="mercati" onclick="go('mercati')">Mercati</button>
+<button data-t="cantiere" onclick="go('cantiere')">Cantiere</button>
+<button data-t="diario" onclick="go('diario')">Diario</button>
+</nav>
+<script>
+const G=['Grano','Sale','Legname','Vino','Ferro','Vetro','Seta','Spezie'];
+const BASE=[10,14,18,24,32,40,90,130];
+// [stato, x, y, moltiplicatori prezzo per merce: <1 produce, >1 richiede]
+const C={
+'Venezia':['Repubblica di Venezia',12.3,45.4,[1.3,.7,1,1.2,1.3,.6,1.2,1.3]],
+'Genova':['Repubblica di Genova',8.9,44.4,[1.2,1,.9,1,.8,1.2,1.2,1.2]],
+'Pisa':['Repubblica di Pisa',10.4,43.7,[1,1,.7,1.1,1.1,1.2,1.1,1.2]],
+'Amalfi':['Ducato di Amalfi',14.6,40.6,[1.1,1.2,1.1,.7,1.2,1.2,1.1,1.1]],
+'Ragusa':['Repubblica di Ragusa',18.1,42.6,[.9,.8,1,1,.7,1.3,1.2,1.2]],
+'Costantinopoli':['Impero bizantino',29,41,[.7,1.3,1.3,1.2,1.3,1.4,.8,.8]],
+'Alessandria':['Sultanato mamelucco',29.9,31.2,[.6,1.2,1.5,1.3,1.4,1.3,.9,.6]],
+'Tunisi':['Emirato hafside',10.2,36.8,[.8,.6,1.4,1.3,1.2,1.3,1.2,1.1]],
+'Barcellona':['Corona d’Aragona',2.2,41.4,[1,.9,.8,.8,.9,1.3,1.3,1.4]]
+};
+const T={'Cocca':{cap:60,v:1,cost:900},'Galea':{cap:110,v:1.4,cost:2000},'Nave tonda':{cap:220,v:1.1,cost:4200}};
+const NAMES=['San Marco','Stella Maris','Leone Alato','Sant’Elena','Fortuna','Aquila','Santa Chiara','Gabbiano','Tramontana','Libeccio','Sirena','Delfino'];
+const KEY='mercanti_med_v1';
+const $=s=>document.querySelector(s);
+const fmt=n=>Math.round(n).toLocaleString('it-IT');
+const tot=a=>a.reduce((x,y)=>x+y,0);
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+let S;
+function init(){
+ S={day:1,gold:1500,nid:2,ships:[{id:1,name:'Santa Lucia',type:'Cocca',city:'Venezia',dest:null,arr:0,cargo:G.map(()=>0)}],dep:{},mk:{},log:['Giorno 1: inizia la tua avventura da Venezia.'],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
+ for(const c in C){S.dep[c]=G.map(()=>0);S.mk[c]=G.map(()=>100)}
+}
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!S||!S.ships)init();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+function toast(t){const e=$('#toast');e.textContent=t;e.style.opacity=1;clearTimeout(window.tt);window.tt=setTimeout(()=>e.style.opacity=0,2200)}
+function done(m){save();render();if(m)toast(m)}
+function go(t){S.ui.tab=t;done();scrollTo(0,0)}
+function setQ(x){S.ui.qty=x;done()}
+
+const price=(c,i)=>BASE[i]*C[c][3][i]*Math.min(2.5,Math.max(.5,Math.sqrt(100/Math.max(S.mk[c][i],5))));
+const bp=(c,i)=>Math.ceil(price(c,i));
+const sp=(c,i)=>Math.max(1,Math.floor(price(c,i)*.9));
+const dist=(a,b)=>Math.hypot((C[a][1]-C[b][1])*.75,C[a][2]-C[b][2]);
+const days=(a,b,s)=>Math.max(1,Math.ceil(dist(a,b)/T[s.type].v));
+const worth=()=>S.gold+S.ships.reduce((n,s)=>n+T[s.type].cost*.5+s.cargo.reduce((x,q,i)=>x+q*BASE[i],0),0)+Object.values(S.dep).reduce((n,d)=>n+d.reduce((x,q,i)=>x+q*BASE[i],0),0);
+
+function curShip(){
+ const u=S.ui;
+ if(u.store==='D')return null;
+ const sh=S.ships.find(s=>s.id===u.store&&s.city===u.city&&!s.dest);
+ if(!sh)u.store='D';
+ return sh||null;
+}
+function qty(){return S.ui.qty==='max'?9999:S.ui.qty}
+function buy(i){
+ const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<=5||(sh&&tot(arr)>=T[sh.type].cap))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
+ done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio o scorte insufficienti');
+}
+function sell(i){
+ const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ while(k<qty()&&arr[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;arr[i]--;k++}
+ done(k?`Venduti ${k} ${G[i]} per ${fmt(S.gold-g0)} ₯`:'Niente da vendere');
+}
+function move(i,dir){
+ const c=S.ui.city,sh=curShip();if(!sh)return;
+ const dep=S.dep[c];let m;
+ if(dir>0){m=Math.min(qty(),dep[i],T[sh.type].cap-tot(sh.cargo));dep[i]-=m;sh.cargo[i]+=m}
+ else{m=Math.min(qty(),sh.cargo[i]);sh.cargo[i]-=m;dep[i]+=m}
+ done(m?`Spostati ${m} ${G[i]}`:'Nulla da spostare');
+}
+function sail(id){
+ const s=S.ships.find(x=>x.id===id),d=$('#d'+id).value,n=days(s.city,d,s);
+ s.dest=d;s.arr=S.day+n;
+ S.log.unshift(`Giorno ${S.day}: la ${s.name} salpa da ${s.city} per ${d} (${n} giorni).`);
+ done(`${s.name} in rotta per ${d}`);
+}
+function buyShip(t){
+ const c=S.ui.city,T0=T[t];
+ if(S.gold<T0.cost)return toast('Ducati insufficienti');
+ S.gold-=T0.cost;
+ S.ships.push({id:S.nid,name:NAMES[S.nid%NAMES.length],type:t,city:c,dest:null,arr:0,cargo:G.map(()=>0)});
+ S.log.unshift(`Giorno ${S.day}: acquistata la ${NAMES[S.nid%NAMES.length]} (${t}) a ${c}.`);S.nid++;
+ done('Nave acquistata a '+c);
+}
+function sellShip(id){
+ const s=S.ships.find(x=>x.id===id);
+ if(tot(s.cargo))return toast('Scarica prima la nave');
+ S.gold+=T[s.type].cost*.5;S.ships=S.ships.filter(x=>x.id!==id);
+ done('Nave venduta');
+}
+function adv(n){
+ for(let d=0;d<n;d++){
+  S.day++;
+  for(const s of S.ships)S.gold-=T[s.type].cap/30;
+  for(const c in C)for(let i=0;i<8;i++)S.mk[c][i]+=(100-S.mk[c][i])*.06;
+  if(Math.random()<.05){
+   const c=rnd(Object.keys(C)),i=Math.floor(Math.random()*8),up=Math.random()<.5;
+   S.mk[c][i]*=up?2:.4;
+   S.log.unshift(`Giorno ${S.day}: ${up?'abbondanza':'carestia'} di ${G[i]} a ${c}.`);
+  }
+  for(const s of S.ships)if(s.dest&&S.day>=s.arr){
+   s.city=s.dest;s.dest=null;
+   S.log.unshift(`Giorno ${S.day}: la ${s.name} è giunta a ${s.city}.`);
+   if(tot(s.cargo)>0&&Math.random()<.06){
+    let lost=0;s.cargo=s.cargo.map(q=>{const l=Math.floor(q*.3);lost+=l;return q-l});
+    S.log.unshift(`Giorno ${S.day}: i pirati assalgono la ${s.name}! Perse ${lost} merci.`);
+   }
+  }
+ }
+ S.log=S.log.slice(0,80);S.gold=Math.round(S.gold*100)/100;
+ done();
+}
+const citySel=()=>`<select onchange="S.ui.city=this.value;S.ui.store='D';done()">${Object.keys(C).map(c=>`<option ${c===S.ui.city?'selected':''}>${c}</option>`).join('')}</select>`;
+
+const P={
+porto(){
+ const u=S.ui,c=u.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c];
+ const docked=S.ships.filter(s=>s.city===c&&!s.dest);
+ const q=[1,10,50,'max'].map(x=>`<button class="${u.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
+ const opts=`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])} merci)</option>`+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
+ return `<h2>Porto</h2>${citySel()}
+ <div class="card"><div class="r"><b>${C[c][0]}</b><span class="m">${docked.length} navi in porto</span></div>
+ <small>Ducati: ${fmt(S.gold)} ₯ · Merci nel deposito: ${tot(S.dep[c])}</small>
+ <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button></div></div>
+ <small>Opera su:</small>
+ <select onchange="S.ui.store=this.value==='D'?'D':+this.value;done()">${opts}</select>
+ <div class="b" style="margin:0 0 10px">${q}</div>
+ ${sh?`<small>Carico nave: ${tot(arr)}/${T[sh.type].cap}</small>`:''}
+ ${G.map((g,i)=>`<div class="card"><div class="r"><b>${g}</b><span class="m">Scorte mercato ${Math.round(S.mk[c][i])}</span></div>
+ <div class="r"><span>Compra <b>${bp(c,i)}</b> · Vendi <b>${sp(c,i)}</b> ₯</span><span>${sh?`Nave <b>${arr[i]}</b> · Dep ${S.dep[c][i]}`:`Deposito <b>${arr[i]}</b>`}</span></div>
+ <div class="b"><button onclick="buy(${i})">Compra</button><button onclick="sell(${i})">Vendi</button>${sh?`<button onclick="move(${i},1)">Dep → Nave</button><button onclick="move(${i},-1)">Nave → Dep</button>`:''}</div></div>`).join('')}`;
+},
+navi(){
+ return `<h2>Navi</h2>`+(S.ships.map(s=>{
+  const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]}`:'').filter(Boolean).join(', ')||'vuota';
+  const a=s.dest
+   ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${s.arr-S.day} giorni)`
+   :`Ormeggiata a <b>${s.city}</b>
+   <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).map(x=>`<option value="${x}">${x} · ${days(s.city,x,s)} giorni</option>`).join('')}</select>
+   <div class="b"><button onclick="sail(${s.id})">Salpa</button><button onclick="S.ui.city='${s.city}';S.ui.store=${s.id};go('porto')">Carica e scarica</button></div>`;
+  return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><div>${a}</div><small>Carico: ${cg}</small></div>`;
+ }).join('')||'<p>Non hai navi. Compra una nave al Cantiere.</p>');
+},
+mercati(){
+ const cs=Object.keys(C),f=S.ui.city;
+ const col=i=>{const v=cs.map(c=>bp(c,i));return[Math.min(...v),Math.max(...v)]};
+ const mm=G.map((g,i)=>col(i));
+ return `<h2>Mercati</h2><small>Prezzo di acquisto. Verde: il più basso, rosso: il più alto. Giorni di viaggio calcolati da:</small>${citySel()}
+ <div class="tw"><table><tr><th>Città</th>${G.map(g=>`<th>${g}</th>`).join('')}<th>Giorni</th></tr>
+ ${cs.map(c=>`<tr><td><b>${c}</b><br><small>${C[c][0]}</small></td>${G.map((g,i)=>{const p=bp(c,i);return `<td class="${p===mm[i][0]?'lo':p===mm[i][1]?'hi':''}">${p}</td>`}).join('')}<td>${c===f?'—':days(f,c,{type:'Cocca'})+' (Galea '+days(f,c,{type:'Galea'})+')'}</td></tr>`).join('')}
+ </table></div><small>Vendendo ottieni circa il 90% del prezzo. I giorni indicati valgono per la Cocca; tra parentesi la Galea.</small>`;
+},
+cantiere(){
+ const c=S.ui.city;
+ return `<h2>Cantiere</h2><small>Acquisti la nave nel porto scelto:</small>${citySel()}
+ ${Object.entries(T).map(([n,t])=>`<div class="card"><div class="r"><b>${n}</b><span>${fmt(t.cost)} ₯</span></div><small>Capacità ${t.cap} · velocità ${t.v} · mantenimento ${(t.cap/30).toFixed(1)} ₯/giorno</small><div class="b"><button onclick="buyShip('${n}')">Compra a ${c}</button></div></div>`).join('')}
+ <h2>La tua flotta</h2>
+ ${S.ships.map(s=>`<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type}</span></div><small>${s.dest?'In mare verso '+s.dest:'A '+s.city}</small>${!s.dest?`<div class="b"><button onclick="sellShip(${s.id})">Vendi per ${fmt(T[s.type].cost*.5)} ₯</button></div>`:''}</div>`).join('')||'<p>Nessuna nave.</p>'}`;
+},
+diario(){
+ return `<h2>Diario</h2><div class="card"><div class="r"><span>Ducati</span><b>${fmt(S.gold)} ₯</b></div><div class="r"><span>Patrimonio stimato</span><b>${fmt(worth())} ₯</b></div><small>Include navi (metà del prezzo), merci e deposito a prezzo base.</small></div>
+ <div class="card log">${S.log.map(l=>`<p>${l}</p>`).join('')}</div>
+ <div class="b"><button onclick="if(confirm('Cancellare la partita e ricominciare?')){init();done('Nuova partita')}">Nuova partita</button></div>`;
+}
+};
+function render(){
+ const u=S.ui;
+ $('#top').innerHTML=`<span>Giorno ${S.day}</span><span>${fmt(S.gold)} ₯</span>`;
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===u.tab));
+ $('#main').innerHTML=P[u.tab]();
+}
+render();
+</script>
+</body>
+</html>
