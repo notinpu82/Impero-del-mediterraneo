@@ -126,6 +126,21 @@ function setRoute(id){
  if(!s.dest)autoStep(s);
  done('Rotta avviata per '+s.name);
 }
+function xfer(s,i,dir,n){
+ const dep=S.dep[s.city];let m;
+ if(dir>0){m=Math.min(n,dep[i],T[s.type].cap-tot(s.cargo));dep[i]-=m;s.cargo[i]+=m}
+ else{m=Math.max(0,Math.min(n,s.cargo[i],S.wh[s.city]-tot(dep)));s.cargo[i]-=m;dep[i]+=m}
+ return m;
+}
+function moveS(id,i,dir){
+ const s=S.ships.find(x=>x.id===id),m=xfer(s,i,dir,qty());
+ done(m?`Spostati ${m} ${G[i]}`:(dir>0?'Nave piena o niente nel deposito':'Deposito pieno o niente da scaricare'));
+}
+function loadAll(id,dir){
+ const s=S.ships.find(x=>x.id===id);let t=0;
+ for(let i=0;i<G.length;i++)t+=xfer(s,i,dir,9999);
+ done(t?`Spostate ${t} merci`:'Niente da spostare');
+}
 function stopRoute(id){S.ships.find(x=>x.id===id).route=null;done('Rotta fermata')}
 function build(){
  if(S.gold<1500)return toast('Ducati insufficienti');
@@ -273,13 +288,15 @@ porto(){
  <div class="b"><button onclick="buy(${i})">Compra</button><button onclick="sell(${i})">Vendi</button>${sh?`<button onclick="move(${i},1)">Dep → Nave</button><button onclick="move(${i},-1)">Nave → Dep</button>`:''}</div></div>`).join('')}`;
 },
 navi(){
- return `<h2>Navi</h2>`+(S.ships.map(s=>{
+ const q=[1,10,50,'max'].map(x=>`<button class="${S.ui.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
+ const lo=s=>{const d=S.dep[s.city];const rows=G.map((g,i)=>(d[i]||s.cargo[i])?`<div class="r" style="margin-top:8px"><span>${g}<br><small>Deposito ${d[i]} · Nave ${s.cargo[i]}</small></span><span class="b" style="margin:0"><button onclick="moveS(${s.id},${i},1)">Carica</button><button onclick="moveS(${s.id},${i},-1)">Scarica</button></span></div>`:'').join('');return `<div class="b"><button onclick="loadAll(${s.id},1)">Carica tutto</button><button onclick="loadAll(${s.id},-1)">Scarica tutto</button></div><small>Deposito di ${s.city}: ${tot(d)}/${S.wh[s.city]}</small>${rows||'<br><small>Nessuna merce da spostare.</small>'}`};
+ return `<h2>Navi</h2><small>Quantità per carico e scarico:</small><div class="b" style="margin:4px 0 10px">${q}</div>`+(S.ships.map(s=>{
   const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]}`:'').filter(Boolean).join(', ')||'vuota';
   const a=s.dest
    ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${s.arr-S.day} giorni)`
    :`Ormeggiata a <b>${s.city}</b>
    <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).sort((x,y)=>days(s.city,x,s)-days(s.city,y,s)).map(x=>`<option value="${x}">${x} · ${days(s.city,x,s)} giorni</option>`).join('')}</select>
-   <div class="b"><button onclick="sail(${s.id})">Salpa</button><button onclick="S.ui.city='${s.city}';S.ui.store=${s.id};go('porto')">Carica e scarica</button></div>`;
+   <div class="b"><button onclick="sail(${s.id})">Salpa</button><button onclick="S.ui.city='${s.city}';S.ui.store=${s.id};go('porto')">Compra e vendi</button></div>${lo(s)}`;
   return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><div>${a}</div><small>Carico: ${cg} · Cannoni ${s.arm||0}/3</small>${s.route?`<br><small>Rotta automatica: ${s.route.a} ⇄ ${s.route.b}</small>`:''}</div>`;
  }).join('')||'<p>Non hai navi. Compra una nave al Cantiere.</p>');
 },
