@@ -7,14 +7,16 @@
 <style>
 :root{--bg:#0e1b26;--card:#162a3a;--ink:#e8eef2;--mut:#8fa6b6;--gold:#e0b252;--line:#27465c;--ok:#6fcf97;--bad:#f2837a;--btn:#21465f}
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:104px 10px 74px}
+body{margin:0;font:15px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:122px 10px 74px}
+body.start{padding-top:56px;padding-bottom:20px}
+body.start nav,body.start .days{display:none}
 h2{font:600 20px Georgia,serif;margin:6px 0 10px;color:var(--gold)}
 header{position:fixed;top:0;left:0;right:0;background:#0a141c;border-bottom:1px solid var(--line);padding:8px 12px;z-index:5}
 #top{font:600 17px Georgia,serif;color:var(--gold);display:flex;justify-content:space-between;gap:8px}
 .days{display:flex;gap:6px;margin-top:6px}
-.days button{flex:1}
+.days button{flex:1;padding:7px 4px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0a141c;border-top:1px solid var(--line);z-index:5}
-nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 2px;font-size:13px}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 2px;font-size:12px;border-radius:0}
 nav button.on{color:var(--gold);box-shadow:inset 0 3px 0 var(--gold)}
 button,select{font:inherit;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
 button:active{background:var(--line)}
@@ -33,10 +35,11 @@ td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:
 .lo{color:var(--ok);font-weight:700}.hi{color:var(--bad);font-weight:700}
 #toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);background:var(--gold);color:#1a1405;padding:8px 14px;border-radius:20px;opacity:0;transition:opacity .2s;z-index:9;max-width:90%;text-align:center;pointer-events:none}
 .log p{margin:0;padding:6px 0;border-bottom:1px solid var(--line)}
+input{font:inherit;width:100%;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin:4px 0 10px}#bar{height:3px;background:var(--line);margin-top:6px;border-radius:2px;overflow:hidden}#bar i{display:block;height:100%;width:0;background:var(--gold)}#sub{font-size:12px;color:var(--mut)}body.start #bar,body.start #sub{display:none}
 </style>
 </head>
 <body>
-<header><div id="top"></div><div class="days"><button onclick="adv(1)">+1 giorno</button><button onclick="adv(7)">+7 giorni</button><button onclick="adv(30)">+30 giorni</button></div></header>
+<header><div id="top"></div><div id="sub"></div><div class="days" id="spd"></div><div id="bar"><i></i></div></header>
 <main id="main"></main>
 <div id="toast"></div>
 <nav>
@@ -44,49 +47,120 @@ td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:
 <button data-t="navi" onclick="go('navi')">Navi</button>
 <button data-t="mercati" onclick="go('mercati')">Mercati</button>
 <button data-t="cantiere" onclick="go('cantiere')">Cantiere</button>
+<button data-t="imprese" onclick="go('imprese')">Imprese</button>
 <button data-t="diario" onclick="go('diario')">Diario</button>
 </nav>
 <script>
-const G=['Grano','Sale','Legname','Vino','Ferro','Vetro','Seta','Spezie'];
-const BASE=[10,14,18,24,32,40,90,130];
-// [stato, x, y, moltiplicatori prezzo per merce: <1 produce, >1 richiede]
+const G=['Grano','Sale','Legname','Vino','Ferro','Vetro','Seta','Spezie','Olio','Pesce salato','Lana','Panni','Cera','Allume','Zucchero','Pelli'];
+const BASE=[10,14,18,24,32,40,90,130,22,12,28,55,35,60,70,20];
+// città: [stato, x, y, merci prodotte (prezzo basso), merci richieste (prezzo alto)]
 const C={
-'Venezia':['Repubblica di Venezia',12.3,45.4,[1.3,.7,1,1.2,1.3,.6,1.2,1.3]],
-'Genova':['Repubblica di Genova',8.9,44.4,[1.2,1,.9,1,.8,1.2,1.2,1.2]],
-'Pisa':['Repubblica di Pisa',10.4,43.7,[1,1,.7,1.1,1.1,1.2,1.1,1.2]],
-'Amalfi':['Ducato di Amalfi',14.6,40.6,[1.1,1.2,1.1,.7,1.2,1.2,1.1,1.1]],
-'Ragusa':['Repubblica di Ragusa',18.1,42.6,[.9,.8,1,1,.7,1.3,1.2,1.2]],
-'Costantinopoli':['Impero bizantino',29,41,[.7,1.3,1.3,1.2,1.3,1.4,.8,.8]],
-'Alessandria':['Sultanato mamelucco',29.9,31.2,[.6,1.2,1.5,1.3,1.4,1.3,.9,.6]],
-'Tunisi':['Emirato hafside',10.2,36.8,[.8,.6,1.4,1.3,1.2,1.3,1.2,1.1]],
-'Barcellona':['Corona d’Aragona',2.2,41.4,[1,.9,.8,.8,.9,1.3,1.3,1.4]]
+'Venezia':['Repubblica di Venezia',12.3,45.4,[1,5],[0,4,6,7,2]],
+'Genova':['Repubblica di Genova',8.9,44.4,[4,11],[0,6,7,13]],
+'Pisa':['Repubblica di Pisa',10.4,43.7,[2,8],[5,6,7]],
+'Amalfi':['Ducato di Amalfi',14.6,40.6,[3,8],[4,6,0]],
+'Ragusa':['Repubblica di Ragusa',18.1,42.6,[4,15,9],[5,11,7]],
+'Palermo':['Regno di Sicilia',13.4,38.1,[0,1,14],[11,4,5]],
+'Marsiglia':['Contea di Provenza',5.4,43.3,[9,1,3],[6,7,10]],
+'Barcellona':['Corona d’Aragona',2.2,41.4,[10,8,3],[7,6,5]],
+'Valencia':['Corona d’Aragona',-0.4,39.5,[14,8,10],[11,4,13]],
+'Algeri':['Emirato hafside',3.1,36.8,[10,15,12],[11,5,4]],
+'Tunisi':['Emirato hafside',10.2,36.8,[1,8,10],[2,5,11]],
+'Salonicco':['Impero bizantino',22.9,40.6,[0,12,15],[5,11,1]],
+'Costantinopoli':['Impero bizantino',29,41,[6,0,12],[5,11,1,3]],
+'Candia':['Dominio veneziano',25.1,35.3,[3,8],[11,4,0]],
+'Caffa':['Colonia genovese',35.4,45,[9,15,12,0],[11,5,3]],
+'Famagosta':['Regno di Cipro',33.9,35.1,[14,1],[11,2,4]],
+'Acri':['Regno di Gerusalemme',35.1,32.9,[7,6,14],[11,4,3,5]],
+'Alessandria':['Sultanato mamelucco',29.9,31.2,[7,14,13],[2,4,11,5]]
 };
+const mult=(c,i)=>{const [,,,p,w]=C[c];return(p.includes(i)?.65:w.includes(i)?1.35:1)*(1+(((c.length*7+i*13)%9)-4)/100)};
 const T={'Cocca':{cap:60,v:1,cost:900},'Galea':{cap:110,v:1.4,cost:2000},'Nave tonda':{cap:220,v:1.1,cost:4200}};
 const NAMES=['San Marco','Stella Maris','Leone Alato','Sant’Elena','Fortuna','Aquila','Santa Chiara','Gabbiano','Tramontana','Libeccio','Sirena','Delfino'];
-const KEY='mercanti_med_v1';
+const RANKS=[['Venditore ambulante',0],['Bottegaio',2500],['Mercante',6000],['Armatore',15000],['Patrizio',35000],['Consigliere',80000],['Console',180000],['Doge',400000]];
+const KEY='mercanti_med_v3';
 const $=s=>document.querySelector(s);
 const fmt=n=>Math.round(n).toLocaleString('it-IT');
 const tot=a=>a.reduce((x,y)=>x+y,0);
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
-let S;
+let S,speed=0,acc=0;
+const tg=(c,i)=>C[c][3].includes(i)?130:C[c][4].includes(i)?75:100;
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function init(){
- S={day:1,gold:1500,nid:2,ships:[{id:1,name:'Santa Lucia',type:'Cocca',city:'Venezia',dest:null,arr:0,cargo:G.map(()=>0)}],dep:{},mk:{},log:['Giorno 1: inizia la tua avventura da Venezia.'],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
- for(const c in C){S.dep[c]=G.map(()=>0);S.mk[c]=G.map(()=>100)}
+ S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
+ for(const c in C){S.dep[c]=G.map(()=>0);S.wh[c]=0;S.mk[c]=G.map((g,i)=>tg(c,i))}
 }
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!S.ships)init();
+if(!S.bld)S.bld=[];
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 function toast(t){const e=$('#toast');e.textContent=t;e.style.opacity=1;clearTimeout(window.tt);window.tt=setTimeout(()=>e.style.opacity=0,2200)}
 function done(m){save();render();if(m)toast(m)}
 function go(t){S.ui.tab=t;done();scrollTo(0,0)}
 function setQ(x){S.ui.qty=x;done()}
+function setSpeed(n){speed=n;renderSpeed()}
+function start(c){
+ S.name=esc(($('#nm').value||'').trim().slice(0,24))||'Mercante';
+ S.started=true;S.home=c;S.ui.city=c;S.wh[c]=100;acc=0;
+ S.ships.push({id:S.nid++,name:'Santa Lucia',type:'Cocca',city:c,dest:null,arr:0,st:0,arm:0,cargo:G.map(()=>0)});
+ S.log.unshift(`Giorno 1: ${S.name} inizia la sua avventura da ${c}.`);
+ done();scrollTo(0,0);
+}
+const lim=()=>1500+S.rank*1500;
+function autoStep(s){
+ const r=s.route,c=s.city;
+ if(c!==r.a&&c!==r.b){s.dest=r.a;s.st=S.day;s.arr=S.day+days(c,r.a,s);return}
+ let sold=0;const g0=S.gold;
+ for(let i=0;i<G.length;i++)while(s.cargo[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;s.cargo[i]--;sold++}
+ const rev=S.gold-g0,gi=c===r.a?r.ga:r.gb;let bought=0;
+ if(gi>=0)while(tot(s.cargo)<T[s.type].cap){const p=bp(c,gi);if(S.gold<p||S.mk[c][gi]<=5)break;S.gold-=p;S.mk[c][gi]--;s.cargo[gi]++;bought++}
+ const o=c===r.a?r.b:r.a;
+ s.dest=o;s.st=S.day;s.arr=S.day+days(c,o,s);
+ S.log.unshift(`Giorno ${S.day}: rotta della ${s.name} a ${c}: venduti ${sold} pezzi per ${fmt(rev)} ₯, comprati ${bought}, poi verso ${o}.`);
+}
+function setRoute(id){
+ const s=S.ships.find(x=>x.id===id),v=k=>$('#'+k+id).value;
+ const a=v('ra'),b=v('rb');
+ if(a===b)return toast('Scegli due porti diversi');
+ s.route={a,b,ga:+v('rga'),gb:+v('rgb')};
+ if(!s.dest)autoStep(s);
+ done('Rotta avviata per '+s.name);
+}
+function stopRoute(id){S.ships.find(x=>x.id===id).route=null;done('Rotta fermata')}
+function build(){
+ if(S.gold<1500)return toast('Ducati insufficienti');
+ S.gold-=1500;S.bld.push({city:S.ui.city,good:+$('#bg').value,lv:1,acc:0});
+ done('Laboratorio costruito a '+S.ui.city);
+}
+function upgrade(i){
+ const b=S.bld[i];
+ if(b.lv>=5)return;
+ if(S.gold<1000)return toast('Ducati insufficienti');
+ S.gold-=1000;b.lv++;done('Laboratorio al livello '+b.lv);
+}
+function expand(){
+ const c=S.ui.city;
+ if(S.gold<400)return toast('Ducati insufficienti');
+ S.gold-=400;S.wh[c]+=100;done(`Deposito di ${c} ampliato a ${S.wh[c]}`);
+}
+function armShip(id){
+ const s=S.ships.find(x=>x.id===id);
+ if((s.arm||0)>=3)return toast('Già al massimo dei cannoni');
+ if(S.gold<400)return toast('Ducati insufficienti');
+ S.gold-=400;s.arm=(s.arm||0)+1;done(`${s.name}: ${s.arm} cannoni`);
+}
+function loan(n){
+ if(n>0){if(S.debt+n>lim())return toast('Limite di credito raggiunto');S.gold+=n;S.debt+=n}
+ else{const m=Math.min(-n,S.debt,Math.floor(S.gold));if(m<=0)return toast('Niente da rimborsare');S.gold-=m;S.debt-=m}
+ done();
+}
 
-const price=(c,i)=>BASE[i]*C[c][3][i]*Math.min(2.5,Math.max(.5,Math.sqrt(100/Math.max(S.mk[c][i],5))));
+const price=(c,i)=>BASE[i]*mult(c,i)*Math.min(2.5,Math.max(.5,Math.sqrt(100/Math.max(S.mk[c][i],5))));
 const bp=(c,i)=>Math.ceil(price(c,i));
 const sp=(c,i)=>Math.max(1,Math.floor(price(c,i)*.9));
 const dist=(a,b)=>Math.hypot((C[a][1]-C[b][1])*.75,C[a][2]-C[b][2]);
 const days=(a,b,s)=>Math.max(1,Math.ceil(dist(a,b)/T[s.type].v));
-const worth=()=>S.gold+S.ships.reduce((n,s)=>n+T[s.type].cost*.5+s.cargo.reduce((x,q,i)=>x+q*BASE[i],0),0)+Object.values(S.dep).reduce((n,d)=>n+d.reduce((x,q,i)=>x+q*BASE[i],0),0);
+const worth=()=>S.gold-S.debt+Object.values(S.wh).reduce((a,b)=>a+b*2,0)+S.ships.reduce((n,s)=>n+T[s.type].cost*.5+s.cargo.reduce((x,q,i)=>x+q*BASE[i],0),0)+Object.values(S.dep).reduce((n,d)=>n+d.reduce((x,q,i)=>x+q*BASE[i],0),0);
 
 function curShip(){
  const u=S.ui;
@@ -98,8 +172,8 @@ function curShip(){
 function qty(){return S.ui.qty==='max'?9999:S.ui.qty}
 function buy(i){
  const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
- while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<=5||(sh&&tot(arr)>=T[sh.type].cap))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
- done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio o scorte insufficienti');
+ while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<=5||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
+ done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio (nave o deposito) o scorte insufficienti');
 }
 function sell(i){
  const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
@@ -110,12 +184,12 @@ function move(i,dir){
  const c=S.ui.city,sh=curShip();if(!sh)return;
  const dep=S.dep[c];let m;
  if(dir>0){m=Math.min(qty(),dep[i],T[sh.type].cap-tot(sh.cargo));dep[i]-=m;sh.cargo[i]+=m}
- else{m=Math.min(qty(),sh.cargo[i]);sh.cargo[i]-=m;dep[i]+=m}
+ else{m=Math.max(0,Math.min(qty(),sh.cargo[i],S.wh[c]-tot(dep)));sh.cargo[i]-=m;dep[i]+=m}
  done(m?`Spostati ${m} ${G[i]}`:'Nulla da spostare');
 }
 function sail(id){
  const s=S.ships.find(x=>x.id===id),d=$('#d'+id).value,n=days(s.city,d,s);
- s.dest=d;s.arr=S.day+n;
+ s.dest=d;s.route=null;s.st=S.day;s.arr=S.day+n;
  S.log.unshift(`Giorno ${S.day}: la ${s.name} salpa da ${s.city} per ${d} (${n} giorni).`);
  done(`${s.name} in rotta per ${d}`);
 }
@@ -123,8 +197,9 @@ function buyShip(t){
  const c=S.ui.city,T0=T[t];
  if(S.gold<T0.cost)return toast('Ducati insufficienti');
  S.gold-=T0.cost;
- S.ships.push({id:S.nid,name:NAMES[S.nid%NAMES.length],type:t,city:c,dest:null,arr:0,cargo:G.map(()=>0)});
- S.log.unshift(`Giorno ${S.day}: acquistata la ${NAMES[S.nid%NAMES.length]} (${t}) a ${c}.`);S.nid++;
+ const nm=NAMES[S.nid%NAMES.length];
+ S.ships.push({id:S.nid++,name:nm,type:t,city:c,dest:null,arr:0,st:0,arm:0,cargo:G.map(()=>0)});
+ S.log.unshift(`Giorno ${S.day}: acquistata la ${nm} (${t}) a ${c}.`);
  done('Nave acquistata a '+c);
 }
 function sellShip(id){
@@ -134,39 +209,61 @@ function sellShip(id){
  done('Nave venduta');
 }
 function adv(n){
+ let msg='';
+ const cs=Object.keys(C);
  for(let d=0;d<n;d++){
   S.day++;
   for(const s of S.ships)S.gold-=T[s.type].cap/30;
-  for(const c in C)for(let i=0;i<8;i++)S.mk[c][i]+=(100-S.mk[c][i])*.06;
-  if(Math.random()<.05){
-   const c=rnd(Object.keys(C)),i=Math.floor(Math.random()*8),up=Math.random()<.5;
+  for(const c in S.wh)S.gold-=S.wh[c]/100;
+  for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);const q=Math.floor(b.acc);b.acc-=q;S.dep[b.city][b.good]+=Math.max(0,Math.min(q,S.wh[b.city]-tot(S.dep[b.city])))}
+  if(S.debt>0)S.debt=Math.round(S.debt*1001)/1000;
+  for(const c in C)for(let i=0;i<G.length;i++)S.mk[c][i]+=(tg(c,i)-S.mk[c][i])*.06;
+  for(let k=0;k<4;k++){const i=Math.floor(Math.random()*G.length),a=rnd(cs),b=rnd(cs);if(a!==b&&price(a,i)<price(b,i)){S.mk[a][i]=Math.max(10,S.mk[a][i]-4);S.mk[b][i]+=4}}
+  if(Math.random()<.08){
+   const c=rnd(cs),i=Math.floor(Math.random()*G.length),up=Math.random()<.5;
    S.mk[c][i]*=up?2:.4;
    S.log.unshift(`Giorno ${S.day}: ${up?'abbondanza':'carestia'} di ${G[i]} a ${c}.`);
   }
   for(const s of S.ships)if(s.dest&&S.day>=s.arr){
    s.city=s.dest;s.dest=null;
+   msg=`La ${s.name} è giunta a ${s.city}`;
    S.log.unshift(`Giorno ${S.day}: la ${s.name} è giunta a ${s.city}.`);
-   if(tot(s.cargo)>0&&Math.random()<.06){
+   const trip=Math.max(1,s.arr-(s.st||0)),pc=1-Math.pow(1-.006*(1-.25*(s.arm||0)),trip);
+   if(tot(s.cargo)>0&&Math.random()<pc){
     let lost=0;s.cargo=s.cargo.map(q=>{const l=Math.floor(q*.3);lost+=l;return q-l});
+    msg=`Pirati! La ${s.name} ha perso ${lost} merci`;
     S.log.unshift(`Giorno ${S.day}: i pirati assalgono la ${s.name}! Perse ${lost} merci.`);
    }
+   if(s.route)autoStep(s);
   }
  }
+ const r=RANKS.reduce((n,x,i)=>worth()>=x[1]?i:n,0);
+ if(r>S.rank){S.rank=r;msg=`Nuovo titolo: ${RANKS[r][0]}!`;S.log.unshift(`Giorno ${S.day}: ottieni il titolo di ${RANKS[r][0]}.`)}
  S.log=S.log.slice(0,80);S.gold=Math.round(S.gold*100)/100;
- done();
+ save();
+ if(document.activeElement&&document.activeElement.tagName==='SELECT')renderTop();else render(true);
+ if(msg)toast(msg);
 }
+setInterval(()=>{if(speed&&S.started){acc+=speed;if(acc>=240){acc-=240;adv(1)}$('#bar i').style.width=(acc/2.4)+'%'}},250);
+
 const citySel=()=>`<select onchange="S.ui.city=this.value;S.ui.store='D';done()">${Object.keys(C).map(c=>`<option ${c===S.ui.city?'selected':''}>${c}</option>`).join('')}</select>`;
 
 const P={
+inizio(){
+ return `<h2>Il tuo nome</h2><input id="nm" maxlength="24" placeholder="Come ti chiami, mercante?" autocomplete="off"><h2>Scegli dove vivere</h2><small>Parti da qui con 1.500 ₯ e una Cocca. Le merci prodotte in una città costano meno, quelle richieste costano di più.</small><div style="height:8px"></div>`+
+ Object.keys(C).map(c=>`<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
+ <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}<br>Richiede: ${C[c][4].map(i=>G[i]).join(', ')}</small>
+ <div class="b"><button onclick="start('${c}')">Inizia a ${c}</button></div></div>`).join('');
+},
 porto(){
  const u=S.ui,c=u.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c];
  const docked=S.ships.filter(s=>s.city===c&&!s.dest);
  const q=[1,10,50,'max'].map(x=>`<button class="${u.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
- const opts=`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])} merci)</option>`+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
+ const opts=`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])}/${S.wh[c]})</option>`+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
  return `<h2>Porto</h2>${citySel()}
  <div class="card"><div class="r"><b>${C[c][0]}</b><span class="m">${docked.length} navi in porto</span></div>
- <small>Ducati: ${fmt(S.gold)} ₯ · Merci nel deposito: ${tot(S.dep[c])}</small>
- <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button></div></div>
+ <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}. Richiede: ${C[c][4].map(i=>G[i]).join(', ')}.<br>Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno</small>
+ <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()">Amplia deposito +100 (400 ₯)</button></div></div>
  <small>Opera su:</small>
  <select onchange="S.ui.store=this.value==='D'?'D':+this.value;done()">${opts}</select>
  <div class="b" style="margin:0 0 10px">${q}</div>
@@ -181,38 +278,54 @@ navi(){
   const a=s.dest
    ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${s.arr-S.day} giorni)`
    :`Ormeggiata a <b>${s.city}</b>
-   <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).map(x=>`<option value="${x}">${x} · ${days(s.city,x,s)} giorni</option>`).join('')}</select>
+   <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).sort((x,y)=>days(s.city,x,s)-days(s.city,y,s)).map(x=>`<option value="${x}">${x} · ${days(s.city,x,s)} giorni</option>`).join('')}</select>
    <div class="b"><button onclick="sail(${s.id})">Salpa</button><button onclick="S.ui.city='${s.city}';S.ui.store=${s.id};go('porto')">Carica e scarica</button></div>`;
-  return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><div>${a}</div><small>Carico: ${cg}</small></div>`;
+  return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><div>${a}</div><small>Carico: ${cg} · Cannoni ${s.arm||0}/3</small>${s.route?`<br><small>Rotta automatica: ${s.route.a} ⇄ ${s.route.b}</small>`:''}</div>`;
  }).join('')||'<p>Non hai navi. Compra una nave al Cantiere.</p>');
 },
 mercati(){
  const cs=Object.keys(C),f=S.ui.city;
- const col=i=>{const v=cs.map(c=>bp(c,i));return[Math.min(...v),Math.max(...v)]};
- const mm=G.map((g,i)=>col(i));
+ const mm=G.map((g,i)=>{const v=cs.map(c=>bp(c,i));return[Math.min(...v),Math.max(...v)]});
  return `<h2>Mercati</h2><small>Prezzo di acquisto. Verde: il più basso, rosso: il più alto. Giorni di viaggio calcolati da:</small>${citySel()}
- <div class="tw"><table><tr><th>Città</th>${G.map(g=>`<th>${g}</th>`).join('')}<th>Giorni</th></tr>
- ${cs.map(c=>`<tr><td><b>${c}</b><br><small>${C[c][0]}</small></td>${G.map((g,i)=>{const p=bp(c,i);return `<td class="${p===mm[i][0]?'lo':p===mm[i][1]?'hi':''}">${p}</td>`}).join('')}<td>${c===f?'—':days(f,c,{type:'Cocca'})+' (Galea '+days(f,c,{type:'Galea'})+')'}</td></tr>`).join('')}
- </table></div><small>Vendendo ottieni circa il 90% del prezzo. I giorni indicati valgono per la Cocca; tra parentesi la Galea.</small>`;
+ <div class="tw"><table><tr><th>Città</th><th>Giorni</th>${G.map(g=>`<th>${g}</th>`).join('')}</tr>
+ ${cs.map(c=>`<tr><td><b>${c}</b><br><small>${C[c][0]}</small></td><td>${c===f?'—':days(f,c,{type:'Cocca'})+' / '+days(f,c,{type:'Galea'})}</td>${G.map((g,i)=>{const p=bp(c,i);return `<td class="${p===mm[i][0]?'lo':p===mm[i][1]?'hi':''}">${p}</td>`}).join('')}</tr>`).join('')}
+ </table></div><small>Vendendo ottieni circa il 90% del prezzo. Giorni: Cocca / Galea.</small>`;
 },
 cantiere(){
  const c=S.ui.city;
  return `<h2>Cantiere</h2><small>Acquisti la nave nel porto scelto:</small>${citySel()}
  ${Object.entries(T).map(([n,t])=>`<div class="card"><div class="r"><b>${n}</b><span>${fmt(t.cost)} ₯</span></div><small>Capacità ${t.cap} · velocità ${t.v} · mantenimento ${(t.cap/30).toFixed(1)} ₯/giorno</small><div class="b"><button onclick="buyShip('${n}')">Compra a ${c}</button></div></div>`).join('')}
  <h2>La tua flotta</h2>
- ${S.ships.map(s=>`<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type}</span></div><small>${s.dest?'In mare verso '+s.dest:'A '+s.city}</small>${!s.dest?`<div class="b"><button onclick="sellShip(${s.id})">Vendi per ${fmt(T[s.type].cost*.5)} ₯</button></div>`:''}</div>`).join('')||'<p>Nessuna nave.</p>'}`;
+ ${S.ships.map(s=>`<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type}</span></div><small>${s.dest?'In mare verso '+s.dest:'A '+s.city} · Cannoni ${s.arm||0}/3</small>${!s.dest?`<div class="b"><button onclick="armShip(${s.id})">Arma +1 (400 ₯)</button><button onclick="sellShip(${s.id})">Vendi per ${fmt(T[s.type].cost*.5)} ₯</button></div>`:''}</div>`).join('')||'<p>Nessuna nave.</p>'}`;
+},
+imprese(){
+ const gs=`<option value="-1">Niente</option>`+G.map((g,i)=>`<option value="${i}">${g}</option>`).join('');
+ const co=sel=>Object.keys(C).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
+ return `<h2>Laboratori</h2><small>Producono merci nel deposito della città (serve spazio libero). 3 unità al giorno per livello, ×1,5 se la città produce quella merce. Mantenimento 3 ₯ al giorno per livello.</small>${citySel()}
+ <select id="bg">${G.map((g,i)=>`<option value="${i}">${g}</option>`).join('')}</select>
+ <div class="b"><button onclick="build()">Costruisci a ${S.ui.city} (1.500 ₯)</button></div><div style="height:8px"></div>
+ ${S.bld.map((b,i)=>`<div class="card"><div class="r"><b>${G[b.good]} · ${b.city}</b><span class="m">Livello ${b.lv}/5</span></div><small>${(3*b.lv*(C[b.city][3].includes(b.good)?1.5:1)).toFixed(1)} unità al giorno${S.wh[b.city]?'':' · nessun deposito in questa città!'}</small>${b.lv<5?`<div class="b"><button onclick="upgrade(${i})">Potenzia (1.000 ₯)</button></div>`:''}</div>`).join('')}
+ <h2>Rotte automatiche</h2><small>La nave vende tutto il carico, compra la merce scelta per quel porto e riparte per l’altro porto.</small><div style="height:8px"></div>
+ ${S.ships.map(s=>{const r=s.route;return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type}</span></div>`+(r?`<small>${r.a} (compra ${r.ga>=0?G[r.ga]:'niente'}) ⇄ ${r.b} (compra ${r.gb>=0?G[r.gb]:'niente'})</small><div class="b"><button onclick="stopRoute(${s.id})">Ferma rotta</button></div>`:`<small>Porto A e merce da comprare lì; porto B e merce da comprare lì.</small><select id="ra${s.id}">${co(s.city)}</select><select id="rga${s.id}">${gs}</select><select id="rb${s.id}">${co('')}</select><select id="rgb${s.id}">${gs}</select><div class="b"><button onclick="setRoute(${s.id})">Avvia rotta</button></div>`)+`</div>`}).join('')||'<p>Nessuna nave.</p>'}`;
 },
 diario(){
- return `<h2>Diario</h2><div class="card"><div class="r"><span>Ducati</span><b>${fmt(S.gold)} ₯</b></div><div class="r"><span>Patrimonio stimato</span><b>${fmt(worth())} ₯</b></div><small>Include navi (metà del prezzo), merci e deposito a prezzo base.</small></div>
- <div class="card log">${S.log.map(l=>`<p>${l}</p>`).join('')}</div>
- <div class="b"><button onclick="if(confirm('Cancellare la partita e ricominciare?')){init();done('Nuova partita')}">Nuova partita</button></div>`;
+ return `<h2>Diario</h2><div class="card"><div class="r"><span>Mercante</span><b>${S.name}</b></div><div class="r"><span>Titolo</span><b>${RANKS[S.rank][0]}</b></div>${RANKS[S.rank+1]?`<small>Prossimo titolo, ${RANKS[S.rank+1][0]}: patrimonio ${fmt(RANKS[S.rank+1][1])} ₯</small>`:''}<div class="r"><span>Città d’origine</span><b>${S.home}</b></div><div class="r"><span>Ducati</span><b>${fmt(S.gold)} ₯</b></div><div class="r"><span>Patrimonio stimato</span><b>${fmt(worth())} ₯</b></div><small>Include navi (metà del prezzo), merci, depositi, meno i debiti.</small></div>
+ <div class="card"><div class="r"><b>Banca</b><span class="m">Debito ${fmt(S.debt)} ₯ · limite ${fmt(lim())} ₯</span></div><small>Interesse 0,1% al giorno. Il limite cresce con il titolo.</small><div class="b"><button onclick="loan(500)">Prendi 500 ₯</button><button onclick="loan(-500)">Rimborsa 500 ₯</button></div></div><div class="card log">${S.log.map(l=>`<p>${l}</p>`).join('')}</div>
+ <div class="b"><button onclick="if(confirm('Cancellare la partita e ricominciare?')){speed=0;acc=0;init();done('Nuova partita')}">Nuova partita</button></div>`;
 }
 };
-function render(){
+function renderTop(){$('#top').innerHTML=S.started?`<span>Giorno ${S.day}</span><span>${fmt(S.gold)} ₯</span>`:'<span>Mercanti del Mediterraneo</span>';$('#sub').innerHTML=S.started?`${S.name}, ${RANKS[S.rank][0]}${S.debt?' · debito '+fmt(S.debt)+' ₯':''}`:''}
+function renderSpeed(){
+ $('#spd').innerHTML=[['Pausa',0],['1X',1],['2X',2],['4X',4]].map(([l,v])=>`<button class="${speed===v?'on':''}" onclick="setSpeed(${v})">${l}</button>`).join('');
+}
+function render(keep){
  const u=S.ui;
- $('#top').innerHTML=`<span>Giorno ${S.day}</span><span>${fmt(S.gold)} ₯</span>`;
+ document.body.classList.toggle('start',!S.started);
+ renderTop();renderSpeed();
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===u.tab));
- $('#main').innerHTML=P[u.tab]();
+ const sv=[...document.querySelectorAll('#main select')].map(s=>s.value);
+ $('#main').innerHTML=S.started?P[u.tab]():P.inizio();
+ if(keep)[...document.querySelectorAll('#main select')].forEach((s,i)=>{if(sv[i]!==undefined&&[...s.options].some(o=>o.value===sv[i]||o.text===sv[i]))s.value=sv[i]});
 }
 render();
 </script>
