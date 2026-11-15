@@ -102,7 +102,7 @@ const RATE={};
 })();
 const T={'Cocca':{cap:60,v:1,cost:900},'Galea':{cap:110,v:1.4,cost:2000},'Nave tonda':{cap:220,v:1.1,cost:4200}};
 const NAMES=['San Marco','Stella Maris','Leone Alato','Sant’Elena','Fortuna','Aquila','Santa Chiara','Gabbiano','Tramontana','Libeccio','Sirena','Delfino'];
-const RANKS=[['Venditore ambulante',0],['Bottegaio',2500],['Mercante',6000],['Armatore',15000],['Patrizio',35000],['Consigliere',80000],['Console',180000],['Doge',400000]];
+const RANKS=[['Venditore ambulante',0],['Bottegaio',25000],['Mercante',60000],['Armatore',150000],['Patrizio',350000],['Consigliere',800000],['Console',1800000],['Doge',4000000]];
 const KEY='mercanti_med_v4';
 const $=s=>document.querySelector(s);
 const fmt=n=>Math.round(n).toLocaleString('it-IT');
@@ -131,14 +131,16 @@ const needTxt=c=>{const l=G.map((g,i)=>[i,consAt(S.popu[c]||C[c][5],i)+inDem(c,i
 const seasonInfo=()=>{const s=seas(),ab=G.filter((g,i)=>SEAS[i][s]>=1.25),sc=G.filter((g,i)=>SEAS[i][s]<=.8);return `<div class="card"><b>${SN[s]}</b> · giorno ${((S.day-1)%90)+1} di 90<br><small>Raccolto abbondante: ${ab.join(', ')||'—'}<br>Raccolto scarso: ${sc.join(', ')||'—'}</small></div>`};
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function init(){
- S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},popu:{},sat:{},crisis:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
- for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[];S.dep[c]=G.map(()=>0);S.wh[c]=0;S.popu[c]=C[c][5];S.sat[c]=60;S.mk[c]=G.map((g,i)=>(RATE[c][i]>0?1.6:.7)*refOf(c,i))}
+ S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},popu:{},sat:{},crisis:{},own:{},lea:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
+ for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[];S.dep[c]=G.map(()=>0);S.wh[c]=0;S.own[c]=0;S.lea[c]=0;S.popu[c]=C[c][5];S.sat[c]=60;S.mk[c]=G.map((g,i)=>(RATE[c][i]>0?1.6:.7)*refOf(c,i))}
 }
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!S.ships)init();
 if(!S.bld)S.bld=[];
 if(!S.pop){S.pop={};S.pros={};S.civ={};for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[]}}
 if(!S.pp)S.pp={};
+if(!S.own){S.own={};S.lea={};for(const c in C){S.own[c]=0;S.lea[c]=0}}
+for(const c in S.wh)if(S.wh[c]>0)S.wh[c]=Math.ceil(S.wh[c]/250)*250;
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 function toast(t){const e=$('#toast');e.textContent=t;e.style.opacity=1;clearTimeout(window.tt);window.tt=setTimeout(()=>e.style.opacity=0,2200)}
 function done(m){save();render();if(m)toast(m)}
@@ -147,13 +149,14 @@ function setQ(x){S.ui.qty=x;done()}
 function setSpeed(n){speed=n;renderSpeed()}
 function start(c){
  S.name=esc(($('#nm').value||'').trim().slice(0,24))||'Mercante';
- S.started=true;S.home=c;S.ui.city=c;S.wh[c]=100;S.pop[c]=10;acc=0;
+ S.started=true;S.home=c;S.ui.city=c;S.pop[c]=10;acc=0;
  S.ships.push({id:S.nid++,name:'Santa Lucia',type:'Cocca',city:c,dest:null,arr:0,st:0,arm:0,cargo:G.map(()=>0)});
  S.log.unshift(`Giorno 1: ${S.name} inizia la sua avventura da ${c}.`);
  done();scrollTo(0,0);
 }
-const lim=()=>1500+S.rank*1500;
-const NEED_RANK=3,NEED_POP=25;
+const LIM=[3000,15000,40000,100000,250000,600000,1200000,2500000];
+const lim=()=>LIM[S.rank];
+const NEED_RANK=3,NEED_POP=25,NEED_BUY=2;
 const can=c=>c===S.home||(S.rank>=NEED_RANK&&(S.pop[c]||0)>=NEED_POP);
 const need=c=>`Per costruire a ${c} serve il titolo di ${RANKS[NEED_RANK][0]} e popolarità ${NEED_POP} in città (ora ${(S.pop[c]||0).toFixed(1)}).`;
 function autoStep(s){
@@ -222,11 +225,43 @@ function upgrade(i){
  if(S.gold<1000)return toast('Ducati insufficienti');
  S.gold-=1000;b.lv++;done('Laboratorio al livello '+b.lv);
 }
+function buyMag(){
+ const c=S.ui.city;
+ if(S.rank<NEED_BUY)return toast(`Serve il titolo di ${RANKS[NEED_BUY][0]}`);
+ if(!can(c))return toast(need(c));
+ if(S.gold<2500)return toast('Ducati insufficienti');
+ S.gold-=2500;S.own[c]+=250;S.wh[c]+=250;
+ S.log.unshift(`Giorno ${S.day}: compri un magazzino a ${c}.`);
+ done(`Magazzino acquistato a ${c}`);
+}
+function redeem(){
+ const c=S.ui.city,rented=Math.max(0,S.wh[c]-(S.own[c]-S.lea[c]));
+ if(S.rank<NEED_BUY||!can(c))return toast('Non hai ancora il permesso');
+ if(rented<250)return toast('Nessun magazzino in affitto da riscattare');
+ if(S.gold<2000)return toast('Ducati insufficienti');
+ S.gold-=2000;S.own[c]+=250;done('Magazzino riscattato: niente più affitto da pagare');
+}
+function lease(d){
+ const c=S.ui.city;
+ if(d>0){
+  if(S.own[c]-S.lea[c]<250||S.wh[c]<250)return toast('Serve un tuo magazzino libero');
+  if(S.wh[c]-250<tot(S.dep[c]))return toast('Svuota il magazzino prima di darlo in affitto');
+  S.lea[c]+=250;S.wh[c]-=250;done('Magazzino dato in affitto a terzi');
+ }else{
+  if(S.lea[c]<250)return;
+  S.lea[c]-=250;S.wh[c]+=250;done('Magazzino ripreso');
+ }
+}
+const magCard=c=>{
+ const o=S.own[c]||0,l=S.lea[c]||0,rented=Math.max(0,S.wh[c]-(o-l)),ok=S.rank>=NEED_BUY&&can(c);
+ return `<div class="card"><b>Magazzini a ${c}</b><br><small>Capacità usabile ${S.wh[c]}: in affitto ${rented}, tuoi ${Math.max(0,o-l)}. Locati a terzi: ${l}${l?` (rendono ${fmt(l/250*70*(1+(S.pros[c]||0)/100))} ₯ a settimana)`:''}.<br>${ok?'Puoi comprare i magazzini e darli in affitto a terzi.':S.rank<NEED_BUY?`Per comprare serve il titolo di ${RANKS[NEED_BUY][0]}.`:need(c)}</small>
+ <div class="b"><button onclick="buyMag()" ${ok?'':'disabled'}>Compra (2.500 ₯)</button><button onclick="redeem()" ${ok&&rented>=250?'':'disabled'}>Riscatta affitto (2.000 ₯)</button><button onclick="lease(1)" ${o-l>=250&&S.wh[c]>=250?'':'disabled'}>Metti in affitto</button><button onclick="lease(-1)" ${l>=250?'':'disabled'}>Riprendi</button></div></div>`;
+};
 function expand(){
  const c=S.ui.city;
  if(!can(c))return toast(need(c));
  if(S.gold<400)return toast('Ducati insufficienti');
- S.gold-=400;S.wh[c]+=100;done(`Deposito di ${c} ampliato a ${S.wh[c]}`);
+ S.gold-=400;S.wh[c]+=250;S.log.unshift(`Giorno ${S.day}: affitti un magazzino a ${c} (capacità ${S.wh[c]}).`);done(`Magazzino a ${c}: capacità ${S.wh[c]}`);
 }
 function armShip(id){
  const s=S.ships.find(x=>x.id===id);
@@ -247,7 +282,7 @@ const tr=(c,i)=>{const p=S.pp&&S.pp[c]?S.pp[c][i]:price(c,i),n=price(c,i);return
 const sp=(c,i)=>Math.max(1,Math.floor(price(c,i)*.9*(1+pf(c))));
 const dist=(a,b)=>Math.hypot((C[a][1]-C[b][1])*.75,C[a][2]-C[b][2]);
 const days=(a,b,s)=>Math.max(1,Math.ceil(dist(a,b)/T[s.type].v));
-const worth=()=>S.gold-S.debt+Object.values(S.wh).reduce((a,b)=>a+b*2,0)+S.ships.reduce((n,s)=>n+T[s.type].cost*.5+s.cargo.reduce((x,q,i)=>x+q*BASE[i],0),0)+Object.values(S.dep).reduce((n,d)=>n+d.reduce((x,q,i)=>x+q*BASE[i],0),0);
+const worth=()=>S.gold-S.debt+Object.values(S.own).reduce((a,b)=>a+b/250*1500,0)+S.ships.reduce((n,s)=>n+T[s.type].cost*.5+s.cargo.reduce((x,q,i)=>x+q*BASE[i],0),0)+Object.values(S.dep).reduce((n,d)=>n+d.reduce((x,q,i)=>x+q*BASE[i],0),0);
 
 function curShip(){
  const u=S.ui;
@@ -333,7 +368,7 @@ function adv(n){
   S.day++;
   if((S.day-1)%90===0){msg=`Comincia ${SN[seas()]}`;S.log.unshift(`Giorno ${S.day}: comincia ${SN[seas()]}.`)}
   for(const s of S.ships)S.gold-=T[s.type].cap/30;
-  for(const c in S.wh)S.gold-=S.wh[c]/100;
+  if(S.day%7===0)for(const c in S.wh){const o=S.own[c]||0,l=S.lea[c]||0;S.gold-=Math.max(0,S.wh[c]-(o-l))/250*50;S.gold+=l/250*70*(1+(S.pros[c]||0)/100)}
   for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);let q=Math.floor(b.acc);b.acc-=q;const d=S.dep[b.city],rc=IND[b.good];q=Math.max(0,Math.min(q,S.wh[b.city]-tot(d)));if(rc){for(const j in rc.in)q=Math.min(q,Math.floor(d[j]/rc.in[j]));if(q>0)for(const j in rc.in)d[j]-=q*rc.in[j]}d[b.good]+=q}
   for(const c in S.civ)for(const x of S.civ[c])S.gold+=CIV[x][5]*(1+S.pros[c]/100);
   if(S.debt>0)S.debt=Math.round(S.debt*1001)/1000;
@@ -370,7 +405,7 @@ const citySel=()=>`<select onchange="S.ui.city=this.value;S.ui.store='D';done()"
 
 const P={
 inizio(){
- return `<h2>Il tuo nome</h2><input id="nm" maxlength="24" placeholder="Come ti chiami, mercante?" autocomplete="off"><h2>Scegli dove vivere</h2><small>Parti da qui con 1.500 ₯ e una Cocca. Le merci prodotte in una città costano meno, quelle richieste costano di più.</small><div style="height:8px"></div>`+
+ return `<h2>Il tuo nome</h2><input id="nm" maxlength="24" placeholder="Come ti chiami, mercante?" autocomplete="off"><h2>Scegli dove vivere</h2><small>Parti da qui con 1.500 ₯ e una Cocca. All’inizio non hai magazzini: commerci direttamente dalla nave, poi potrai affittarne uno dal mastro del porto.</small><div style="height:8px"></div>`+
  Object.keys(C).map(c=>`<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
  <small>Produce: ${prodTxt(c)}<br>Importa: ${needTxt(c)}<br>Abitanti: ${fmt(C[c][5]*1000)}</small>
  <div class="b"><button onclick="start('${c}')">Inizia a ${c}</button></div></div>`).join('');
@@ -382,8 +417,9 @@ porto(){
  const opts=(S.wh[c]>0?`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])}/${S.wh[c]})</option>`:'')+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
  return `<h2>Porto</h2>${citySel()}
  <div class="card"><div class="r"><b>${C[c][0]}</b><span class="m">${docked.length} navi in porto</span></div>
- <small>Produce: ${prodTxt(c)}. Importa: ${needTxt(c)}.<br>${S.wh[c]>0?`Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno`:'Qui non hai un deposito: vendi e compra direttamente dalla nave. '+(can(c)?'Puoi costruirne uno.':need(c))}</small>
- <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()" ${can(c)?'':'disabled'}>${S.wh[c]>0?'Amplia deposito +100':'Costruisci deposito'} (400 ₯)</button></div></div>
+ <small>Produce: ${prodTxt(c)}. Importa: ${needTxt(c)}.<br>${S.wh[c]>0?`Deposito: ${tot(S.dep[c])}/${S.wh[c]} · affitto ${fmt(Math.max(0,S.wh[c]-((S.own[c]||0)-(S.lea[c]||0)))/250*50)} ₯ a settimana`:'Qui non hai un magazzino: vendi e compra direttamente dalla nave. '+(can(c)?'Affittane uno dal mastro del porto.':need(c))}</small>
+ <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()" ${can(c)?'':'disabled'}>${S.wh[c]>0?'Affitta altro magazzino (+250)':'Affitta magazzino'} (400 ₯ + 50 ₯/sett.)</button></div></div>
+ ${magCard(c)}
  ${!docked.length&&S.wh[c]<=0?'<div class="card"><small>Nessuna nave in porto: porta qui una nave per commerciare.</small></div>':''}
  <small>Opera su:</small>
  <select onchange="S.ui.store=this.value==='D'?'D':+this.value;done()">${opts}</select>
@@ -443,8 +479,8 @@ imprese(){
  ${S.ships.map(s=>{const r=s.route;return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type}</span></div>`+(r?`<small>${r.a} (compra ${r.ga>=0?G[r.ga]:'niente'}) ⇄ ${r.b} (compra ${r.gb>=0?G[r.gb]:'niente'})</small><div class="b"><button onclick="stopRoute(${s.id})">Ferma rotta</button></div>`:`<small>Porto A e merce da comprare lì; porto B e merce da comprare lì.</small><select id="ra${s.id}">${co(s.city)}</select><select id="rga${s.id}">${gs}</select><select id="rb${s.id}">${co('')}</select><select id="rgb${s.id}">${gs}</select><div class="b"><button onclick="setRoute(${s.id})">Avvia rotta</button></div>`)+`</div>`}).join('')||'<p>Nessuna nave.</p>'}`;
 },
 diario(){
- return `<h2>Diario</h2><div class="card"><div class="r"><span>Mercante</span><b>${S.name}</b></div><div class="r"><span>Titolo</span><b>${RANKS[S.rank][0]}</b></div>${RANKS[S.rank+1]?`<small>Prossimo titolo, ${RANKS[S.rank+1][0]}: patrimonio ${fmt(RANKS[S.rank+1][1])} ₯</small>`:''}<div class="r"><span>Città d’origine</span><b>${S.home}</b></div><div class="r"><span>Ducati</span><b>${fmt(S.gold)} ₯</b></div><div class="r"><span>Patrimonio stimato</span><b>${fmt(worth())} ₯</b></div><small>Include navi (metà del prezzo), merci, depositi, meno i debiti.</small></div>
- <div class="card"><div class="r"><b>Banca</b><span class="m">Debito ${fmt(S.debt)} ₯ · limite ${fmt(lim())} ₯</span></div><small>Interesse 0,1% al giorno. Il limite cresce con il titolo.</small><div class="b"><button onclick="loan(500)">Prendi 500 ₯</button><button onclick="loan(-500)">Rimborsa 500 ₯</button></div></div><div class="card log">${S.log.map(l=>`<p>${l}</p>`).join('')}</div>
+ return `<h2>Diario</h2><div class="card"><div class="r"><span>Mercante</span><b>${S.name}</b></div><div class="r"><span>Titolo</span><b>${RANKS[S.rank][0]}</b></div>${RANKS[S.rank+1]?`<small>Prossimo titolo, ${RANKS[S.rank+1][0]}: patrimonio ${fmt(RANKS[S.rank+1][1])} ₯</small>`:''}<div class="r"><span>Città d’origine</span><b>${S.home}</b></div><div class="r"><span>Ducati</span><b>${fmt(S.gold)} ₯</b></div><div class="r"><span>Patrimonio stimato</span><b>${fmt(worth())} ₯</b></div><small>Include navi (metà del prezzo), merci, depositi, meno i debiti; i magazzini di tua proprietà contano.</small></div>
+ <div class="card"><div class="r"><b>Banca</b><span class="m">Debito ${fmt(S.debt)} ₯ · limite ${fmt(lim())} ₯</span></div><small>Interesse 0,1% al giorno. Il limite cresce con il titolo.</small><div class="b"><button onclick="loan(500)">Prendi 500 ₯</button><button onclick="loan(5000)">Prendi 5.000 ₯</button><button onclick="loan(50000)">Prendi 50.000 ₯</button></div><div class="b"><button onclick="loan(-500)">Rimborsa 500 ₯</button><button onclick="loan(-5000)">Rimborsa 5.000 ₯</button><button onclick="loan(-1e9)">Rimborsa tutto</button></div></div><div class="card log">${S.log.map(l=>`<p>${l}</p>`).join('')}</div>
  <div class="b"><button onclick="if(confirm('Cancellare la partita e ricominciare?')){speed=0;acc=0;init();done('Nuova partita')}">Nuova partita</button></div>`;
 }
 };
