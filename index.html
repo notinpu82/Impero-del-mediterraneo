@@ -55,32 +55,55 @@ input{font:inherit;width:100%;color:var(--ink);background:var(--card);border:1px
 <script>
 const G=['Grano','Sale','Legname','Vino','Ferro','Vetro','Seta','Spezie','Olio','Pesce salato','Lana','Panni','Cera','Allume','Zucchero','Pelli'];
 const BASE=[10,14,18,24,32,40,90,130,22,12,28,55,35,60,70,20];
-// città: [stato, x, y, merci prodotte (prezzo basso), merci richieste (prezzo alto)]
+// città: [stato, x, y, materie prime prodotte, industrie (beni finiti), abitanti in migliaia]
 const C={
-'Venezia':['Repubblica di Venezia',12.3,45.4,[1,5],[0,4,6,7,2]],
-'Genova':['Repubblica di Genova',8.9,44.4,[4,11],[0,6,7,13]],
-'Pisa':['Repubblica di Pisa',10.4,43.7,[2,8],[5,6,7]],
-'Amalfi':['Ducato di Amalfi',14.6,40.6,[3,8],[4,6,0]],
-'Ragusa':['Repubblica di Ragusa',18.1,42.6,[4,15,9],[5,11,7]],
-'Palermo':['Regno di Sicilia',13.4,38.1,[0,1,14],[11,4,5]],
-'Marsiglia':['Contea di Provenza',5.4,43.3,[9,1,3],[6,7,10]],
-'Barcellona':['Corona d’Aragona',2.2,41.4,[10,8,3],[7,6,5]],
-'Valencia':['Corona d’Aragona',-0.4,39.5,[14,8,10],[11,4,13]],
-'Algeri':['Emirato hafside',3.1,36.8,[10,15,12],[11,5,4]],
-'Tunisi':['Emirato hafside',10.2,36.8,[1,8,10],[2,5,11]],
-'Salonicco':['Impero bizantino',22.9,40.6,[0,12,15],[5,11,1]],
-'Costantinopoli':['Impero bizantino',29,41,[6,0,12],[5,11,1,3]],
-'Candia':['Dominio veneziano',25.1,35.3,[3,8],[11,4,0]],
-'Caffa':['Colonia genovese',35.4,45,[9,15,12,0],[11,5,3]],
-'Famagosta':['Regno di Cipro',33.9,35.1,[14,1],[11,2,4]],
-'Acri':['Regno di Gerusalemme',35.1,32.9,[7,6,14],[11,4,3,5]],
-'Alessandria':['Sultanato mamelucco',29.9,31.2,[7,14,13],[2,4,11,5]]
+'Venezia':['Repubblica di Venezia',12.3,45.4,[1,9],[5],40],
+'Genova':['Repubblica di Genova',8.9,44.4,[2,8],[11],35],
+'Pisa':['Repubblica di Pisa',10.4,43.7,[2,8,10],[],20],
+'Amalfi':['Ducato di Amalfi',14.6,40.6,[3,8,12],[],12],
+'Ragusa':['Repubblica di Ragusa',18.1,42.6,[4,15,9],[],10],
+'Palermo':['Regno di Sicilia',13.4,38.1,[0,1,14],[],25],
+'Marsiglia':['Contea di Provenza',5.4,43.3,[9,1,3],[5],18],
+'Barcellona':['Corona d’Aragona',2.2,41.4,[10,8,3,2],[11],22],
+'Valencia':['Corona d’Aragona',-0.4,39.5,[14,8,0],[],16],
+'Algeri':['Emirato hafside',3.1,36.8,[10,15,12],[],12],
+'Tunisi':['Emirato hafside',10.2,36.8,[1,8,0,10],[],18],
+'Salonicco':['Impero bizantino',22.9,40.6,[0,12,15,4],[],15],
+'Costantinopoli':['Impero bizantino',29,41,[6,0,9,12],[11,5],60],
+'Candia':['Dominio veneziano',25.1,35.3,[3,8],[],8],
+'Caffa':['Colonia genovese',35.4,45,[9,15,12,0,2],[],12],
+'Famagosta':['Regno di Cipro',33.9,35.1,[14,1,8,13],[],10],
+'Acri':['Regno di Gerusalemme',35.1,32.9,[7,6,14],[],14],
+'Alessandria':['Sultanato mamelucco',29.9,31.2,[7,14,13,0],[],40]
 };
-const mult=(c,i)=>{const [,,,p,w]=C[c];return(p.includes(i)?.65:w.includes(i)?1.35:1)*(1+(((c.length*7+i*13)%9)-4)/100)};
+// industrie: bene finito <- materie prime consumate per unità prodotta
+const IND={5:{in:{2:1,1:.5}},11:{in:{10:2,13:.3}}};
+// consumi giornalieri per 1000 abitanti: poveri, benestanti, ricchi
+const SH=[.6,.3,.1],K=.1;
+const NEED=[
+ {0:7,9:4,1:1,2:1.5,15:.3},
+ {0:4,9:1.5,3:3,8:2,10:1.5,2:1.5,1:.8,4:.5,15:.5,11:1.2,12:.5,14:1,7:.6,5:.6,6:.3},
+ {3:4,8:2.5,11:4,6:3.6,7:4.5,5:3.6,14:4.5,12:3,0:1.5,9:.5,4:.5}];
+const consAt=(pk,i)=>{let t=0;for(let k=0;k<3;k++)t+=pk*SH[k]*(NEED[k][i]||0)*K;return t};
+// calibrazione iniziale: la produzione mondiale supera del 20% il consumo, ripartita tra i produttori in base agli abitanti
+const RATE={};
+(()=>{
+ const cs=Object.keys(C),tot=G.map((g,i)=>cs.reduce((n,c)=>n+consAt(C[c][5],i),0));
+ for(const c of cs)RATE[c]=G.map(()=>0);
+ for(const i in IND){
+  const pr=cs.filter(c=>C[c][4].includes(+i)),w=pr.reduce((n,c)=>n+C[c][5],0),o=tot[i]*1.2;
+  for(const c of pr)RATE[c][i]=o*C[c][5]/w;
+  for(const j in IND[i].in)tot[j]+=o*IND[i].in[j];
+ }
+ G.forEach((g,i)=>{
+  const pr=cs.filter(c=>C[c][3].includes(i)),w=pr.reduce((n,c)=>n+C[c][5],0);
+  for(const c of pr)RATE[c][i]=tot[i]*1.2*C[c][5]/w;
+ });
+})();
 const T={'Cocca':{cap:60,v:1,cost:900},'Galea':{cap:110,v:1.4,cost:2000},'Nave tonda':{cap:220,v:1.1,cost:4200}};
 const NAMES=['San Marco','Stella Maris','Leone Alato','Sant’Elena','Fortuna','Aquila','Santa Chiara','Gabbiano','Tramontana','Libeccio','Sirena','Delfino'];
 const RANKS=[['Venditore ambulante',0],['Bottegaio',2500],['Mercante',6000],['Armatore',15000],['Patrizio',35000],['Consigliere',80000],['Console',180000],['Doge',400000]];
-const KEY='mercanti_med_v3';
+const KEY='mercanti_med_v4';
 const $=s=>document.querySelector(s);
 const fmt=n=>Math.round(n).toLocaleString('it-IT');
 const tot=a=>a.reduce((x,y)=>x+y,0);
@@ -98,14 +121,18 @@ const CIV=[
 ['Cattedrale',20000,45,30,15,25,'Meta di pellegrini da tutta la regione.']];
 const SEAS=[[.8,1.4,1.2,.9],[.9,1.4,1.1,.8],[1,.9,1,1.3],[.8,.9,1.5,1.1],[1,1.1,1,.9],[1,.9,1,1.1],[1.3,1.1,.8,.8],[.9,1.2,1.1,.8],[.8,.8,1.1,1.5],[1.1,1.2,.9,.7],[1.4,1.1,.9,.7],[1.1,1.2,.9,.7],[.9,1.3,1,.8],[1,1,1,1],[.9,.9,1.4,1.2],[.9,.9,1.3,1.1]];
 const SN=['Primavera','Estate','Autunno','Inverno'];
-const LUX=[5,6,7,11,14],STAP=[0,1,2,3,4,8,9,10,15];
 const seas=()=>Math.floor(((S.day-1)%360)/90);
-const tg=(c,i)=>{const b=C[c][3].includes(i)?130:C[c][4].includes(i)?75:100,p=(S.pros&&S.pros[c])||0;return b*SEAS[i][seas()]*(LUX.includes(i)?1-p/400:STAP.includes(i)?1+p/250:1)};
-const seasonInfo=()=>{const s=seas(),ab=G.filter((g,i)=>SEAS[i][s]>=1.25),sc=G.filter((g,i)=>SEAS[i][s]<=.8);return `<div class="card"><b>${SN[s]}</b> · giorno ${((S.day-1)%90)+1} di 90<br><small>Abbondano: ${ab.join(', ')||'—'}<br>Scarseggiano: ${sc.join(', ')||'—'}</small></div>`};
+const WIN=[2,8,10,11,15],SATW=[3,1,1,1,.5,.3,.3,.3,1,2,.5,.5,.3,0,.3,.5];
+const cons=(c,i)=>consAt(S.popu[c],i)*(seas()===3&&WIN.includes(i)?1.3:1);
+const refOf=(c,i)=>consAt(S.popu[c],i)*10+25;
+const inDem=(c,j)=>C[c][4].reduce((n,i)=>n+RATE[c][i]*(IND[i].in[j]||0),0);
+const prodTxt=c=>[...C[c][3],...C[c][4]].map(i=>G[i]).join(', ');
+const needTxt=c=>{const l=G.map((g,i)=>[i,consAt(S.popu[c]||C[c][5],i)+inDem(c,i)-RATE[c][i]]).filter(x=>x[1]>.3).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>G[x[0]]);return l.join(', ')||'—'};
+const seasonInfo=()=>{const s=seas(),ab=G.filter((g,i)=>SEAS[i][s]>=1.25),sc=G.filter((g,i)=>SEAS[i][s]<=.8);return `<div class="card"><b>${SN[s]}</b> · giorno ${((S.day-1)%90)+1} di 90<br><small>Raccolto abbondante: ${ab.join(', ')||'—'}<br>Raccolto scarso: ${sc.join(', ')||'—'}</small></div>`};
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function init(){
- S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
- for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[];S.dep[c]=G.map(()=>0);S.wh[c]=0;S.mk[c]=G.map((g,i)=>tg(c,i))}
+ S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},popu:{},sat:{},crisis:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
+ for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[];S.dep[c]=G.map(()=>0);S.wh[c]=0;S.popu[c]=C[c][5];S.sat[c]=60;S.mk[c]=G.map((g,i)=>(RATE[c][i]>0?1.6:.7)*refOf(c,i))}
 }
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!S.ships)init();
@@ -135,7 +162,7 @@ function autoStep(s){
  let sold=0;const g0=S.gold;
  for(let i=0;i<G.length;i++)while(s.cargo[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;s.cargo[i]--;sold++}
  const rev=S.gold-g0,gi=c===r.a?r.ga:r.gb;let bought=0;
- if(gi>=0)while(tot(s.cargo)<T[s.type].cap){const p=bp(c,gi);if(S.gold<p||S.mk[c][gi]<=5)break;S.gold-=p;S.mk[c][gi]--;s.cargo[gi]++;bought++}
+ if(gi>=0)while(tot(s.cargo)<T[s.type].cap){const p=bp(c,gi);if(S.gold<p||S.mk[c][gi]<1)break;S.gold-=p;S.mk[c][gi]--;s.cargo[gi]++;bought++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+(sold+bought)*.02);
  const o=c===r.a?r.b:r.a;
  s.dest=o;s.st=S.day;s.arr=S.day+days(c,o,s);
@@ -213,7 +240,7 @@ function loan(n){
  done();
 }
 
-const price=(c,i)=>BASE[i]*mult(c,i)*Math.min(2.5,Math.max(.5,Math.sqrt(100/Math.max(S.mk[c][i],5))));
+const price=(c,i)=>BASE[i]*Math.min(2.5,Math.max(.5,Math.pow(refOf(c,i)/(S.mk[c][i]+1),.7)));
 const pf=c=>Math.min(.1,((S.pop&&S.pop[c])||0)/1000);
 const bp=(c,i)=>Math.ceil(price(c,i)*(1-pf(c)));
 const tr=(c,i)=>{const p=S.pp&&S.pp[c]?S.pp[c][i]:price(c,i),n=price(c,i);return n>p*1.01?'▲':n<p*.99?'▼':'–'};
@@ -234,7 +261,7 @@ function qty(){return S.ui.qty==='max'?9999:S.ui.qty}
 function buy(i){
  const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
  if(!sh&&S.wh[c]<=0)return toast('Qui non hai un deposito: commercia dalla nave');
- while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<=5||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
+ while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<1||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+k*.02);
  done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio (nave o deposito) o scorte insufficienti');
 }
@@ -273,6 +300,32 @@ function sellShip(id){
  S.gold+=T[s.type].cost*.5;S.ships=S.ships.filter(x=>x.id!==id);
  done('Nave venduta');
 }
+function mktDay(cs){
+ let msg='';const sn=seas();
+ for(const c of cs){
+  const m=S.mk[c];
+  for(const i of C[c][3])m[i]+=RATE[c][i]*SEAS[i][sn]*(.9+Math.random()*.2);
+  for(const i of C[c][4]){const rc=IND[i];let cy=RATE[c][i]*(.9+Math.random()*.2);for(const j in rc.in)cy=Math.min(cy,m[j]/rc.in[j]);cy=Math.max(0,cy);for(const j in rc.in)m[j]-=cy*rc.in[j];m[i]+=cy}
+  let num=0,den=0;
+  for(let i=0;i<G.length;i++){
+   const n=cons(c,i);
+   if(n>0){num+=SATW[i]*Math.min(1,m[i]/n);den+=SATW[i];m[i]=Math.max(0,m[i]-n)}
+   const rf=refOf(c,i)*2.5;if(m[i]>rf)m[i]-=(m[i]-rf)*.035;
+  }
+  const t=Math.min(100,100*num/Math.max(den,.01)+S.pros[c]/10);
+  S.sat[c]+=(t-S.sat[c])*.08;
+  S.popu[c]=Math.min(C[c][5]*3,Math.max(C[c][5]*.5,S.popu[c]*(1+(S.sat[c]-55)/45*.0004)));
+  if(S.sat[c]<25&&!S.crisis[c]){S.crisis[c]=true;msg=`Crisi a ${c}: fame e malcontento`;S.log.unshift(`Giorno ${S.day}: crisi a ${c}: scarseggiano i beni di prima necessità.`)}
+  else if(S.sat[c]>45)S.crisis[c]=false;
+ }
+ for(let k=0;k<20;k++){
+  const i=Math.floor(Math.random()*G.length),pool=[rnd(cs),rnd(cs),rnd(cs),rnd(cs),rnd(cs)],r=c=>S.mk[c][i]/refOf(c,i);
+  pool.sort((a,b)=>r(b)-r(a));
+  const a=pool[0],b=pool[4];
+  if(a!==b&&r(a)>1.4&&r(b)<.9){const q=Math.min((S.mk[a][i]-refOf(a,i))*.35,50);if(q>1){S.mk[a][i]-=q;S.mk[b][i]+=q*.9}}
+ }
+ return msg;
+}
 function adv(n){
  let msg='';
  const cs=Object.keys(C);
@@ -281,18 +334,15 @@ function adv(n){
   if((S.day-1)%90===0){msg=`Comincia ${SN[seas()]}`;S.log.unshift(`Giorno ${S.day}: comincia ${SN[seas()]}.`)}
   for(const s of S.ships)S.gold-=T[s.type].cap/30;
   for(const c in S.wh)S.gold-=S.wh[c]/100;
-  for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);const q=Math.floor(b.acc);b.acc-=q;S.dep[b.city][b.good]+=Math.max(0,Math.min(q,S.wh[b.city]-tot(S.dep[b.city])))}
+  for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);let q=Math.floor(b.acc);b.acc-=q;const d=S.dep[b.city],rc=IND[b.good];q=Math.max(0,Math.min(q,S.wh[b.city]-tot(d)));if(rc){for(const j in rc.in)q=Math.min(q,Math.floor(d[j]/rc.in[j]));if(q>0)for(const j in rc.in)d[j]-=q*rc.in[j]}d[b.good]+=q}
   for(const c in S.civ)for(const x of S.civ[c])S.gold+=CIV[x][5]*(1+S.pros[c]/100);
   if(S.debt>0)S.debt=Math.round(S.debt*1001)/1000;
   for(const c of cs)S.pp[c]=G.map((g,i)=>price(c,i));
-  for(const c of cs)for(let i=0;i<G.length;i++)S.mk[c][i]=Math.max(8,S.mk[c][i]+(tg(c,i)-S.mk[c][i])*.06+(Math.random()-.5)*4);
-  const av=G.map((g,i)=>cs.reduce((n,c)=>n+S.pp[c][i],0)/cs.length);
-  for(let k=0;k<40;k++){const i=Math.floor(Math.random()*G.length),a=rnd(cs),q=2+Math.floor(Math.random()*5),p=S.pp[a][i];
-   if(p>av[i]*1.05)S.mk[a][i]+=q;else if(p<av[i]*.95)S.mk[a][i]=Math.max(8,S.mk[a][i]-q);else S.mk[a][i]=Math.max(8,S.mk[a][i]+(Math.random()<.5?q:-q))}
+  const mm=mktDay(cs);if(mm)msg=mm;
   if(Math.random()<.08){
-   const c=rnd(cs),i=Math.floor(Math.random()*G.length),up=Math.random()<.5;
-   S.mk[c][i]*=up?2:.4;
-   S.log.unshift(`Giorno ${S.day}: ${up?'abbondanza':'carestia'} di ${G[i]} a ${c}.`);
+   const c=rnd(cs),i=rnd(C[c][3]),up=Math.random()<.5;
+   S.mk[c][i]*=up?1.8:.5;
+   S.log.unshift(`Giorno ${S.day}: ${up?'raccolto eccezionale':'cattivo raccolto'} di ${G[i]} a ${c}.`);
   }
   for(const s of S.ships)if(s.dest&&S.day>=s.arr){
    s.city=s.dest;s.dest=null;
@@ -322,7 +372,7 @@ const P={
 inizio(){
  return `<h2>Il tuo nome</h2><input id="nm" maxlength="24" placeholder="Come ti chiami, mercante?" autocomplete="off"><h2>Scegli dove vivere</h2><small>Parti da qui con 1.500 ₯ e una Cocca. Le merci prodotte in una città costano meno, quelle richieste costano di più.</small><div style="height:8px"></div>`+
  Object.keys(C).map(c=>`<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
- <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}<br>Richiede: ${C[c][4].map(i=>G[i]).join(', ')}</small>
+ <small>Produce: ${prodTxt(c)}<br>Importa: ${needTxt(c)}<br>Abitanti: ${fmt(C[c][5]*1000)}</small>
  <div class="b"><button onclick="start('${c}')">Inizia a ${c}</button></div></div>`).join('');
 },
 porto(){
@@ -332,14 +382,14 @@ porto(){
  const opts=(S.wh[c]>0?`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])}/${S.wh[c]})</option>`:'')+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
  return `<h2>Porto</h2>${citySel()}
  <div class="card"><div class="r"><b>${C[c][0]}</b><span class="m">${docked.length} navi in porto</span></div>
- <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}. Richiede: ${C[c][4].map(i=>G[i]).join(', ')}.<br>${S.wh[c]>0?`Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno`:'Qui non hai un deposito: vendi e compra direttamente dalla nave. '+(can(c)?'Puoi costruirne uno.':need(c))}</small>
+ <small>Produce: ${prodTxt(c)}. Importa: ${needTxt(c)}.<br>${S.wh[c]>0?`Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno`:'Qui non hai un deposito: vendi e compra direttamente dalla nave. '+(can(c)?'Puoi costruirne uno.':need(c))}</small>
  <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()" ${can(c)?'':'disabled'}>${S.wh[c]>0?'Amplia deposito +100':'Costruisci deposito'} (400 ₯)</button></div></div>
  ${!docked.length&&S.wh[c]<=0?'<div class="card"><small>Nessuna nave in porto: porta qui una nave per commerciare.</small></div>':''}
  <small>Opera su:</small>
  <select onchange="S.ui.store=this.value==='D'?'D':+this.value;done()">${opts}</select>
  <div class="b" style="margin:0 0 10px">${q}</div>
  ${sh?`<small>Carico nave: ${tot(arr)}/${T[sh.type].cap}</small>`:''}
- ${G.map((g,i)=>`<div class="card"><div class="r"><b>${g}</b><span class="m">Scorte mercato ${Math.round(S.mk[c][i])}</span></div>
+ ${G.map((g,i)=>`<div class="card"><div class="r"><b>${g}</b><span class="m">Scorte ${Math.round(S.mk[c][i])} · +${(RATE[c][i]*(C[c][3].includes(i)?SEAS[i][seas()]:1)).toFixed(0)} −${cons(c,i).toFixed(0)}/g</span></div>
  <div class="r"><span>Compra <b>${bp(c,i)}</b> ${tr(c,i)} · Vendi <b>${sp(c,i)}</b> ₯</span><span>${sh?`Nave <b>${arr[i]}</b> · Dep ${S.dep[c][i]}`:`Deposito <b>${arr[i]}</b>`}</span></div>
  <div class="b"><button onclick="buy(${i})">Compra</button><button onclick="sell(${i})">Vendi</button>${sh?`<button onclick="move(${i},1)">Dep → Nave</button><button onclick="move(${i},-1)">Nave → Dep</button>`:''}</div></div>`).join('')}`;
 },
@@ -376,7 +426,7 @@ citta(){
  return `<h2>Città</h2>${citySel()}
  <div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
  <small>Popolarità ${pp.toFixed(1)}/100 · sconto ${f.toFixed(1)}% sugli acquisti e +${f.toFixed(1)}% sulle vendite</small><div class="pb"><i style="width:${pp}%"></i></div>
- <small>Prosperità ${pr.toFixed(1)}/100 · più scorte di beni di base e più richiesta di beni di lusso (seta, spezie, vetro, panni, zucchero)</small><div class="pb"><i style="width:${pr}%"></i></div>
+ <small>Abitanti ${fmt(S.popu[c]*1000)}: poveri ${fmt(S.popu[c]*600)}, benestanti ${fmt(S.popu[c]*300)}, ricchi ${fmt(S.popu[c]*100)}</small><br><small>Soddisfazione ${S.sat[c].toFixed(0)}/100${S.sat[c]<25?' · CRISI: fame e malcontento':''}</small><div class="pb"><i style="width:${S.sat[c]}%"></i></div><small>Prosperità ${pr.toFixed(1)}/100 · aumenta la soddisfazione e la crescita degli abitanti</small><div class="pb"><i style="width:${pr}%"></i></div>
  <small>La popolarità cresce commerciando, donando e costruendo opere.</small><br><small>${can(c)?'Puoi costruire qui depositi, laboratori e opere.':need(c)}</small></div>
  <h2>Donazioni</h2><div class="b">${[100,500,1000].map(n=>`<button onclick="donate(${n})">${n} ₯</button>`).join('')}</div><div style="height:8px"></div>
  <h2>Opere cittadine</h2>
@@ -385,7 +435,7 @@ citta(){
 imprese(){
  const gs=`<option value="-1">Niente</option>`+G.map((g,i)=>`<option value="${i}">${g}</option>`).join('');
  const co=sel=>Object.keys(C).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
- return `<h2>Laboratori</h2><small>Producono merci nel deposito della città (serve spazio libero). 3 unità al giorno per livello, ×1,5 se la città produce quella merce. Mantenimento 3 ₯ al giorno per livello.</small>${citySel()}${can(S.ui.city)?'':`<div class="card"><small>${need(S.ui.city)}</small></div>`}
+ return `<h2>Laboratori</h2><small>Producono nel deposito della città (serve spazio libero): 3 unità al giorno per livello, ×1,5 se la città produce quella merce. Vetro (legname e sale) e Panni (lana e allume) consumano le materie prime dal tuo deposito. Mantenimento 3 ₯ al giorno per livello.</small>${citySel()}${can(S.ui.city)?'':`<div class="card"><small>${need(S.ui.city)}</small></div>`}
  <select id="bg">${G.map((g,i)=>`<option value="${i}">${g}</option>`).join('')}</select>
  <div class="b"><button onclick="build()">Costruisci a ${S.ui.city} (1.500 ₯)</button></div><div style="height:8px"></div>
  ${S.bld.map((b,i)=>`<div class="card"><div class="r"><b>${G[b.good]} · ${b.city}</b><span class="m">Livello ${b.lv}/5</span></div><small>${(3*b.lv*(C[b.city][3].includes(b.good)?1.5:1)).toFixed(1)} unità al giorno${S.wh[b.city]?'':' · nessun deposito in questa città!'}</small>${b.lv<5?`<div class="b"><button onclick="upgrade(${i})">Potenzia (1.000 ₯)</button></div>`:''}</div>`).join('')}
