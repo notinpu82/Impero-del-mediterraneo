@@ -126,6 +126,9 @@ function start(c){
  done();scrollTo(0,0);
 }
 const lim=()=>1500+S.rank*1500;
+const NEED_RANK=3,NEED_POP=25;
+const can=c=>c===S.home||(S.rank>=NEED_RANK&&(S.pop[c]||0)>=NEED_POP);
+const need=c=>`Per costruire a ${c} serve il titolo di ${RANKS[NEED_RANK][0]} e popolarità ${NEED_POP} in città (ora ${(S.pop[c]||0).toFixed(1)}).`;
 function autoStep(s){
  const r=s.route,c=s.city;
  if(c!==r.a&&c!==r.b){s.dest=r.a;s.st=S.day;s.arr=S.day+days(c,r.a,s);return}
@@ -171,6 +174,7 @@ function donate(n){
 function civ(i){
  const c=S.ui.city,b=CIV[i];
  if(S.civ[c].includes(i))return;
+ if(!can(c))return toast(need(c));
  if((S.pop[c]||0)<b[2])return toast(`Serve popolarità ${b[2]} a ${c}`);
  if(S.gold<b[1])return toast('Ducati insufficienti');
  S.gold-=b[1];S.civ[c].push(i);
@@ -180,6 +184,7 @@ function civ(i){
 }
 function stopRoute(id){S.ships.find(x=>x.id===id).route=null;done('Rotta fermata')}
 function build(){
+ if(!can(S.ui.city))return toast(need(S.ui.city));
  if(S.gold<1500)return toast('Ducati insufficienti');
  S.gold-=1500;S.bld.push({city:S.ui.city,good:+$('#bg').value,lv:1,acc:0});
  done('Laboratorio costruito a '+S.ui.city);
@@ -192,6 +197,7 @@ function upgrade(i){
 }
 function expand(){
  const c=S.ui.city;
+ if(!can(c))return toast(need(c));
  if(S.gold<400)return toast('Ducati insufficienti');
  S.gold-=400;S.wh[c]+=100;done(`Deposito di ${c} ampliato a ${S.wh[c]}`);
 }
@@ -218,6 +224,7 @@ const worth=()=>S.gold-S.debt+Object.values(S.wh).reduce((a,b)=>a+b*2,0)+S.ships
 
 function curShip(){
  const u=S.ui;
+ if(u.store==='D'&&S.wh[u.city]<=0){const d=S.ships.find(x=>x.city===u.city&&!x.dest);if(d)u.store=d.id}
  if(u.store==='D')return null;
  const sh=S.ships.find(s=>s.id===u.store&&s.city===u.city&&!s.dest);
  if(!sh)u.store='D';
@@ -226,12 +233,14 @@ function curShip(){
 function qty(){return S.ui.qty==='max'?9999:S.ui.qty}
 function buy(i){
  const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ if(!sh&&S.wh[c]<=0)return toast('Qui non hai un deposito: commercia dalla nave');
  while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<=5||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+k*.02);
  done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio (nave o deposito) o scorte insufficienti');
 }
 function sell(i){
  const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ if(!sh&&S.wh[c]<=0)return toast('Qui non hai un deposito: commercia dalla nave');
  while(k<qty()&&arr[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;arr[i]--;k++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+k*.02);
  done(k?`Venduti ${k} ${G[i]} per ${fmt(S.gold-g0)} ₯`:'Niente da vendere');
@@ -320,11 +329,12 @@ porto(){
  const u=S.ui,c=u.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c];
  const docked=S.ships.filter(s=>s.city===c&&!s.dest);
  const q=[1,10,50,'max'].map(x=>`<button class="${u.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
- const opts=`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])}/${S.wh[c]})</option>`+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
+ const opts=(S.wh[c]>0?`<option value="D" ${!sh?'selected':''}>Deposito (${tot(S.dep[c])}/${S.wh[c]})</option>`:'')+docked.map(s=>`<option value="${s.id}" ${sh&&sh.id===s.id?'selected':''}>${s.name} (${tot(s.cargo)}/${T[s.type].cap})</option>`).join('');
  return `<h2>Porto</h2>${citySel()}
  <div class="card"><div class="r"><b>${C[c][0]}</b><span class="m">${docked.length} navi in porto</span></div>
- <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}. Richiede: ${C[c][4].map(i=>G[i]).join(', ')}.<br>Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno</small>
- <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()">Amplia deposito +100 (400 ₯)</button></div></div>
+ <small>Produce: ${C[c][3].map(i=>G[i]).join(', ')}. Richiede: ${C[c][4].map(i=>G[i]).join(', ')}.<br>${S.wh[c]>0?`Deposito: ${tot(S.dep[c])}/${S.wh[c]} · mantenimento ${(S.wh[c]/100).toFixed(1)} ₯/giorno`:'Qui non hai un deposito: vendi e compra direttamente dalla nave. '+(can(c)?'Puoi costruirne uno.':need(c))}</small>
+ <div class="b"><button onclick="go('navi')">Invia navi</button><button onclick="go('mercati')">Confronta prezzi</button><button onclick="go('cantiere')">Cantiere</button><button onclick="expand()" ${can(c)?'':'disabled'}>${S.wh[c]>0?'Amplia deposito +100':'Costruisci deposito'} (400 ₯)</button></div></div>
+ ${!docked.length&&S.wh[c]<=0?'<div class="card"><small>Nessuna nave in porto: porta qui una nave per commerciare.</small></div>':''}
  <small>Opera su:</small>
  <select onchange="S.ui.store=this.value==='D'?'D':+this.value;done()">${opts}</select>
  <div class="b" style="margin:0 0 10px">${q}</div>
@@ -335,7 +345,7 @@ porto(){
 },
 navi(){
  const q=[1,10,50,'max'].map(x=>`<button class="${S.ui.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
- const lo=s=>{const d=S.dep[s.city];const rows=G.map((g,i)=>(d[i]||s.cargo[i])?`<div class="r" style="margin-top:8px"><span>${g}<br><small>Deposito ${d[i]} · Nave ${s.cargo[i]}</small></span><span class="b" style="margin:0"><button onclick="moveS(${s.id},${i},1)">Carica</button><button onclick="moveS(${s.id},${i},-1)">Scarica</button></span></div>`:'').join('');return `<div class="b"><button onclick="loadAll(${s.id},1)">Carica tutto</button><button onclick="loadAll(${s.id},-1)">Scarica tutto</button></div><small>Deposito di ${s.city}: ${tot(d)}/${S.wh[s.city]}</small>${rows||'<br><small>Nessuna merce da spostare.</small>'}`};
+ const lo=s=>{if(S.wh[s.city]<=0)return `<small>Nessun deposito a ${s.city}: commercia dal Porto direttamente dalla nave.</small>`;const d=S.dep[s.city];const rows=G.map((g,i)=>(d[i]||s.cargo[i])?`<div class="r" style="margin-top:8px"><span>${g}<br><small>Deposito ${d[i]} · Nave ${s.cargo[i]}</small></span><span class="b" style="margin:0"><button onclick="moveS(${s.id},${i},1)">Carica</button><button onclick="moveS(${s.id},${i},-1)">Scarica</button></span></div>`:'').join('');return `<div class="b"><button onclick="loadAll(${s.id},1)">Carica tutto</button><button onclick="loadAll(${s.id},-1)">Scarica tutto</button></div><small>Deposito di ${s.city}: ${tot(d)}/${S.wh[s.city]}</small>${rows||'<br><small>Nessuna merce da spostare.</small>'}`};
  return `<h2>Navi</h2><small>Quantità per carico e scarico:</small><div class="b" style="margin:4px 0 10px">${q}</div>`+(S.ships.map(s=>{
   const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]}`:'').filter(Boolean).join(', ')||'vuota';
   const a=s.dest
@@ -367,7 +377,7 @@ citta(){
  <div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
  <small>Popolarità ${pp.toFixed(1)}/100 · sconto ${f.toFixed(1)}% sugli acquisti e +${f.toFixed(1)}% sulle vendite</small><div class="pb"><i style="width:${pp}%"></i></div>
  <small>Prosperità ${pr.toFixed(1)}/100 · più scorte di beni di base e più richiesta di beni di lusso (seta, spezie, vetro, panni, zucchero)</small><div class="pb"><i style="width:${pr}%"></i></div>
- <small>La popolarità cresce commerciando, donando e costruendo opere.</small></div>
+ <small>La popolarità cresce commerciando, donando e costruendo opere.</small><br><small>${can(c)?'Puoi costruire qui depositi, laboratori e opere.':need(c)}</small></div>
  <h2>Donazioni</h2><div class="b">${[100,500,1000].map(n=>`<button onclick="donate(${n})">${n} ₯</button>`).join('')}</div><div style="height:8px"></div>
  <h2>Opere cittadine</h2>
  ${CIV.map((b,i)=>{const own=S.civ[c].includes(i);return `<div class="card"><div class="r"><b>${b[0]}</b><span class="m">${fmt(b[1])} ₯</span></div><small>${b[6]}<br>Popolarità +${b[3]} · prosperità +${b[4]}${b[5]?` · rende ${b[5]} ₯/giorno`:''}${own?'':` · richiede popolarità ${b[2]}`}</small>${own?'<div class="b"><button disabled>Costruita</button></div>':`<div class="b"><button onclick="civ(${i})">Costruisci</button></div>`}</div>`}).join('')}`;
@@ -375,7 +385,7 @@ citta(){
 imprese(){
  const gs=`<option value="-1">Niente</option>`+G.map((g,i)=>`<option value="${i}">${g}</option>`).join('');
  const co=sel=>Object.keys(C).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
- return `<h2>Laboratori</h2><small>Producono merci nel deposito della città (serve spazio libero). 3 unità al giorno per livello, ×1,5 se la città produce quella merce. Mantenimento 3 ₯ al giorno per livello.</small>${citySel()}
+ return `<h2>Laboratori</h2><small>Producono merci nel deposito della città (serve spazio libero). 3 unità al giorno per livello, ×1,5 se la città produce quella merce. Mantenimento 3 ₯ al giorno per livello.</small>${citySel()}${can(S.ui.city)?'':`<div class="card"><small>${need(S.ui.city)}</small></div>`}
  <select id="bg">${G.map((g,i)=>`<option value="${i}">${g}</option>`).join('')}</select>
  <div class="b"><button onclick="build()">Costruisci a ${S.ui.city} (1.500 ₯)</button></div><div style="height:8px"></div>
  ${S.bld.map((b,i)=>`<div class="card"><div class="r"><b>${G[b.good]} · ${b.city}</b><span class="m">Livello ${b.lv}/5</span></div><small>${(3*b.lv*(C[b.city][3].includes(b.good)?1.5:1)).toFixed(1)} unità al giorno${S.wh[b.city]?'':' · nessun deposito in questa città!'}</small>${b.lv<5?`<div class="b"><button onclick="upgrade(${i})">Potenzia (1.000 ₯)</button></div>`:''}</div>`).join('')}
