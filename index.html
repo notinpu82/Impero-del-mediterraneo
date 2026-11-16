@@ -150,7 +150,7 @@ const needTxt=c=>{const l=G.map((g,i)=>[i,consAt(S.popu[c]||C[c][5],i)+inDem(c,i
 const seasonInfo=()=>{const s=seas(),ab=G.filter((g,i)=>SEAS[i][s]>=1.25),sc=G.filter((g,i)=>SEAS[i][s]<=.8);return `<div class="card"><b>${SN[s]}</b> · giorno ${((S.day-1)%90)+1} di 90<br><small>Raccolto abbondante: ${ab.join(', ')||'—'}<br>Raccolto scarso: ${sc.join(', ')||'—'}</small></div>`};
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function init(){
- S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},popu:{},sat:{},crisis:{},own:{},lea:{},war:{},siege:{},neutral:false,log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
+ S={started:false,name:'',home:'',day:1,gold:1500,debt:0,rank:0,bld:[],nid:1,ships:[],dep:{},wh:{},mk:{},pop:{},pros:{},civ:{},pp:{},popu:{},sat:{},crisis:{},own:{},lea:{},war:{},siege:{},neutral:false,depc:{},log:[],ui:{tab:'porto',city:'Venezia',store:'D',qty:10}};
  for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[];S.dep[c]=G.map(()=>0);S.wh[c]=0;S.own[c]=0;S.lea[c]=0;S.popu[c]=C[c][5];S.sat[c]=60;S.mk[c]=G.map((g,i)=>(RATE[c][i]>0?1.6:.7)*refOf(c,i))}
 }
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
@@ -158,6 +158,7 @@ if(!S||!S.ships)init();
 if(!S.bld)S.bld=[];
 if(!S.pop){S.pop={};S.pros={};S.civ={};for(const c in C){S.pop[c]=0;S.pros[c]=0;S.civ[c]=[]}}
 if(!S.pp)S.pp={};
+if(!S.depc)S.depc={};
 if(!S.own){S.own={};S.lea={};for(const c in C){S.own[c]=0;S.lea[c]=0}}
 for(const c in S.wh)if(S.wh[c]>0)S.wh[c]=Math.ceil(S.wh[c]/250)*250;
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
@@ -197,14 +198,19 @@ const strength=s=>(s.arm||0)*3+(s.wp||0)*2+hp(s)/20;
 const infl=f=>Math.max(-100,...Object.keys(C).filter(c=>facOf(c)===f).map(c=>S.pop[c]||0));
 const NEED_MED=6;
 const RIV=[['Venezia','Genova',4],['Genova','Pisa',3],['Aragona','Genova',2],['Venezia','Bizantino',2],['Venezia','Ragusa',1.5],['Pisa','Amalfi',1],['Aragona','Hafsidi',3],['Gerusalemme','Mamelucco',4],['Cipro','Mamelucco',3],['Bizantino','Mamelucco',1.5],['Sicilia','Hafsidi',2],['Provenza','Aragona',1],['Genova','Bizantino',1],['Amalfi','Sicilia',1],['Pisa','Hafsidi',1],['Venezia','Mamelucco',.5]];
+const cb=s=>s.cost||(s.cost=G.map(()=>0));
+const dc=c=>S.depc[c]||(S.depc[c]=G.map(()=>0));
+const avgOf=(cost,q)=>q>0?cost/q:0;
+function loseShare(s,f){let lost=0;const old=s.cargo.slice(),cs=cb(s);s.cargo=s.cargo.map(q=>{const l=Math.floor(q*f);lost+=l;return q-l});cs.forEach((v,i)=>{if(old[i])cs[i]=v*s.cargo[i]/old[i]});return lost}
 function sink(s){S.ships=S.ships.filter(x=>x!==s);S.log.unshift(`Giorno ${S.day}: la ${s.name} è affondata con il suo carico.`)}
 function autoStep(s){
  const r=s.route,c=s.city;
  if(c!==r.a&&c!==r.b){if(blocked(r.a)){s.wait=true;s.next=r.a;return}s.dest=r.a;s.st=S.day;s.arr=S.day+days(c,r.a,s);return}
  let sold=0;const g0=S.gold;
  for(let i=0;i<G.length;i++)while(s.cargo[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;s.cargo[i]--;sold++}
+ s.cost=G.map(()=>0);
  const rev=S.gold-g0,gi=c===r.a?r.ga:r.gb;let bought=0;
- if(gi>=0)while(tot(s.cargo)<T[s.type].cap){const p=bp(c,gi);if(S.gold<p||S.mk[c][gi]<1)break;S.gold-=p;S.mk[c][gi]--;s.cargo[gi]++;bought++}
+ if(gi>=0)while(tot(s.cargo)<T[s.type].cap){const p=bp(c,gi);if(S.gold<p||S.mk[c][gi]<1)break;S.gold-=p;S.mk[c][gi]--;s.cargo[gi]++;cb(s)[gi]+=p;bought++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+(sold+bought)*.02);
  const o=c===r.a?r.b:r.a;
  if(blocked(o)){s.wait=true;s.next=o}else{s.dest=o;s.st=S.day;s.arr=S.day+days(c,o,s)}
@@ -219,9 +225,9 @@ function setRoute(id){
  done('Rotta avviata per '+s.name);
 }
 function xfer(s,i,dir,n){
- const dep=S.dep[s.city];let m;
- if(dir>0){m=Math.min(n,dep[i],T[s.type].cap-tot(s.cargo));dep[i]-=m;s.cargo[i]+=m}
- else{m=Math.max(0,Math.min(n,s.cargo[i],S.wh[s.city]-tot(dep)));s.cargo[i]-=m;dep[i]+=m}
+ const dep=S.dep[s.city],dcs=dc(s.city),scs=cb(s);let m;
+ if(dir>0){m=Math.min(n,dep[i],T[s.type].cap-tot(s.cargo));const a=avgOf(dcs[i],dep[i]);dep[i]-=m;dcs[i]=Math.max(0,dcs[i]-a*m);s.cargo[i]+=m;scs[i]+=a*m}
+ else{m=Math.max(0,Math.min(n,s.cargo[i],S.wh[s.city]-tot(dep)));const a=avgOf(scs[i],s.cargo[i]);s.cargo[i]-=m;scs[i]=Math.max(0,scs[i]-a*m);dep[i]+=m;dcs[i]+=a*m}
  return m;
 }
 function moveS(id,i,dir){
@@ -337,7 +343,7 @@ function smuggle(id){
   if(strength(s)>=8+Math.random()*10){
    s.hp=Math.max(1,hp(s)-10);S.log.unshift(`Giorno ${S.day}: la ${s.name} respinge una pattuglia a ${c}.`);toast('Pattuglia respinta! Il contrabbando prosegue');
   }else{
-   let lost=0;s.cargo=s.cargo.map(q=>{const l=Math.floor(q*.4);lost+=l;return q-l});
+   const lost=loseShare(s,.4);
    s.hp=hp(s)-30;S.pop[c]=(S.pop[c]||0)-10;
    S.log.unshift(`Giorno ${S.day}: la pattuglia di ${c} intercetta la ${s.name}: perse ${lost} merci.`);
    if(s.hp<=0){sink(s);return done('La nave è stata affondata dalla pattuglia')}
@@ -346,6 +352,7 @@ function smuggle(id){
  }
  let rev=0,n=0;
  for(let i=0;i<G.length;i++)while(s.cargo[i]>0){const p=Math.floor(sp(c,i)*1.4);rev+=p;S.gold+=p;S.mk[c][i]++;s.cargo[i]--;n++}
+ s.cost=G.map(()=>0);
  S.pop[c]=(S.pop[c]||0)-2;
  done(`Contrabbando: venduti ${n} pezzi per ${fmt(rev)} ₯`);
 }
@@ -356,11 +363,12 @@ function breakSiege(id){
  if(Math.random()<Math.min(.9,.35+.07*(s.arm||0)+.05*(s.wp||0))){
   let rev=0,n=0;
   for(let i=0;i<G.length;i++)while(s.cargo[i]>0){const p=Math.floor(sp(c,i)*1.5);rev+=p;S.gold+=p;S.mk[c][i]++;s.cargo[i]--;n++}
+  s.cost=G.map(()=>0);
   S.pop[c]=Math.min(100,(S.pop[c]||0)+25);S.sat[c]=Math.min(100,S.sat[c]+15);
   S.log.unshift(`Giorno ${S.day}: la ${s.name} forza il blocco di ${c} e consegna ${n} pezzi: popolarità alle stelle.`);
   done(`Blocco forzato! Incassi ${fmt(rev)} ₯ e +25 popolarità`);
  }else{
-  let lost=0;s.cargo=s.cargo.map(q=>{const l=Math.floor(q*.3);lost+=l;return q-l});
+  const lost=loseShare(s,.3);
   s.hp=hp(s)-30;
   S.log.unshift(`Giorno ${S.day}: la ${s.name} fallisce il forzamento del blocco di ${c}: perse ${lost} merci.`);
   if(s.hp<=0){sink(s);return done('La nave è affondata nel tentativo')}
@@ -420,26 +428,24 @@ function curShip(){
 function qty(){return S.ui.qty==='max'?9999:S.ui.qty}
 function buy(i){
  if(blocked(S.ui.city))return toast(blkMsg(S.ui.city));
- const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold,ca=sh?cb(sh):dc(c);let k=0;
  if(!sh&&S.wh[c]<=0)return toast('Qui non hai un deposito: commercia dalla nave');
- while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<1||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;k++}
+ while(k<qty()){const p=bp(c,i);if(S.gold<p||S.mk[c][i]<1||(sh&&tot(arr)>=T[sh.type].cap)||(!sh&&tot(arr)>=S.wh[c]))break;S.gold-=p;S.mk[c][i]--;arr[i]++;ca[i]+=p;k++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+k*.02);
- done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯`:'Non puoi comprare: ducati, spazio (nave o deposito) o scorte insufficienti');
+ done(k?`Comprati ${k} ${G[i]} per ${fmt(g0-S.gold)} ₯ (media ${((g0-S.gold)/k).toFixed(1)} ₯)`:'Non puoi comprare: ducati, spazio (nave o deposito) o scorte insufficienti');
 }
 function sell(i){
  if(blocked(S.ui.city))return toast(blkMsg(S.ui.city));
- const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold;let k=0;
+ const c=S.ui.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c],g0=S.gold,ca=sh?cb(sh):dc(c);let k=0,co=0;
  if(!sh&&S.wh[c]<=0)return toast('Qui non hai un deposito: commercia dalla nave');
- while(k<qty()&&arr[i]>0){S.gold+=sp(c,i);S.mk[c][i]++;arr[i]--;k++}
+ while(k<qty()&&arr[i]>0){const a=ca[i]/arr[i];co+=a;ca[i]=Math.max(0,ca[i]-a);S.gold+=sp(c,i);S.mk[c][i]++;arr[i]--;k++}
  S.pop[c]=Math.min(100,(S.pop[c]||0)+k*.02);
- done(k?`Venduti ${k} ${G[i]} per ${fmt(S.gold-g0)} ₯`:'Niente da vendere');
+ done(k?`Venduti ${k} ${G[i]} per ${fmt(S.gold-g0)} ₯ (costo medio ${(co/k).toFixed(1)} ₯, utile ${S.gold-g0-co>=0?'+':'−'}${fmt(Math.abs(S.gold-g0-co))} ₯)`:'Niente da vendere');
 }
 function move(i,dir){
  if(blocked(S.ui.city))return toast(blkMsg(S.ui.city));
- const c=S.ui.city,sh=curShip();if(!sh)return;
- const dep=S.dep[c];let m;
- if(dir>0){m=Math.min(qty(),dep[i],T[sh.type].cap-tot(sh.cargo));dep[i]-=m;sh.cargo[i]+=m}
- else{m=Math.max(0,Math.min(qty(),sh.cargo[i],S.wh[c]-tot(dep)));sh.cargo[i]-=m;dep[i]+=m}
+ const sh=curShip();if(!sh)return;
+ const m=xfer(sh,i,dir,qty());
  done(m?`Spostati ${m} ${G[i]}`:'Nulla da spostare');
 }
 function sail(id){
@@ -499,7 +505,7 @@ function adv(n){
   if((S.day-1)%90===0){msg=`Comincia ${SN[seas()]}`;S.log.unshift(`Giorno ${S.day}: comincia ${SN[seas()]}.`)}
   for(const s of S.ships)S.gold-=T[s.type].cap/30;
   if(S.day%7===0)for(const c in S.wh){const o=S.own[c]||0,l=S.lea[c]||0;S.gold-=Math.max(0,S.wh[c]-(o-l))/250*50;if(!blocked(c))S.gold+=l/250*70*(1+(S.pros[c]||0)/100)}
-  for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);let q=Math.floor(b.acc);b.acc-=q;const d=S.dep[b.city],rc=IND[b.good];q=Math.max(0,Math.min(q,S.wh[b.city]-tot(d)));if(rc){for(const j in rc.in)q=Math.min(q,Math.floor(d[j]/rc.in[j]));if(q>0)for(const j in rc.in)d[j]-=q*rc.in[j]}d[b.good]+=q}
+  for(const b of S.bld){S.gold-=3*b.lv;b.acc=(b.acc||0)+3*b.lv*(C[b.city][3].includes(b.good)?1.5:1);let q=Math.floor(b.acc);b.acc-=q;const d=S.dep[b.city],rc=IND[b.good];q=Math.max(0,Math.min(q,S.wh[b.city]-tot(d)));if(rc){for(const j in rc.in)q=Math.min(q,Math.floor(d[j]/rc.in[j]));if(q>0)for(const j in rc.in)d[j]-=q*rc.in[j]}d[b.good]+=q;dc(b.city)[b.good]+=q*BASE[b.good]*.5}
   for(const c in S.civ)if(!blocked(c))for(const x of S.civ[c])S.gold+=CIV[x][5]*(1+S.pros[c]/100);
   if(S.debt>0)S.debt=Math.round(S.debt*1001)/1000;
   for(const c of cs)S.pp[c]=G.map((g,i)=>price(c,i));
@@ -559,6 +565,12 @@ function blockedPage(c){
  <small>${blkMsg(c)}<br>Le guardie respingono le tue navi: mercato, cantiere e magazzini sono chiusi.${S.wh[c]?` Le merci nel tuo magazzino (${frozen}) restano congelate.`:''}<br>${r==='guerra'?'Come uscirne: attendi la pace, diventa mercante neutrale (Diario) o, da Console, media la pace (Città). Le torri sparano alle navi che si avvicinano.':r==='assedio'?'Come uscirne: attendi la fine dell’assedio o forza il blocco con una nave carica di rifornimenti e ben armata.':'Come uscirne: paga un’ammenda in una città neutrale (pagina Città).'}</small></div>
  ${here.length?here.map(s=>`<div class="card"><div class="r"><b>${s.name}</b><span class="m">Scafo ${Math.round(hp(s))}% · forza ${strength(s).toFixed(0)}</span></div><small>Carico: ${tot(s.cargo)} pezzi · Cannoni ${s.arm||0}/6 · Armi ${s.wp||0}/3</small><div class="b"><button onclick="smuggle(${s.id})">Contrabbando (+40%)</button>${r==='assedio'?`<button onclick="breakSiege(${s.id})">Forza il blocco</button>`:''}</div></div>`).join(''):'<div class="card"><small>Nessuna tua nave è alla fonda qui.</small></div>'}`;
 }
+const avgTxt=(c,i,sh)=>{
+ const dq=S.dep[c][i],da=avgOf(dc(c)[i],dq),sv=sp(c,i);
+ const d=a=>{const x=sv-a;return `vendendo ora ${x>=0?'+':'−'}${Math.abs(x).toFixed(1)} ₯ a pezzo`};
+ if(sh){const q=sh.cargo[i],a=avgOf(cb(sh)[i],q);return (q||dq)?`<small>Costo medio: nave ${q?a.toFixed(1)+' ₯':'—'} · deposito ${dq?da.toFixed(1)+' ₯':'—'}${q?' ('+d(a)+')':''}</small>`:''}
+ return dq?`<small>Costo medio nel deposito: ${da.toFixed(1)} ₯ (${d(da)})</small>`:'';
+};
 const dipl=c=>{
  const wars=Object.keys(S.war),sg=Object.keys(S.siege);
  let h=`<h2>Diplomazia</h2><div class="card"><small>Sei cittadino di: <b>${S.neutral?'mercante neutrale':FAC[facOf(S.home)]}</b>.${blocked(c)?'<br>⛔ '+blkMsg(c):''}</small>`;
@@ -594,13 +606,13 @@ porto(){
  ${sh?`<small>Carico nave: ${tot(arr)}/${T[sh.type].cap}</small>`:''}
  ${G.map((g,i)=>`<div class="card"><div class="r"><b>${g}</b><span class="m">Scorte ${Math.round(S.mk[c][i])} · +${(RATE[c][i]*(C[c][3].includes(i)?SEAS[i][seas()]:1)).toFixed(0)} −${cons(c,i).toFixed(0)}/g</span></div>
  <div class="r"><span>Compra <b>${bp(c,i)}</b> ${tr(c,i)} · Vendi <b>${sp(c,i)}</b> ₯</span><span>${sh?`Nave <b>${arr[i]}</b> · Dep ${S.dep[c][i]}`:`Deposito <b>${arr[i]}</b>`}</span></div>
- <div class="b"><button onclick="buy(${i})">Compra</button><button onclick="sell(${i})">Vendi</button>${sh?`<button onclick="move(${i},1)">Dep → Nave</button><button onclick="move(${i},-1)">Nave → Dep</button>`:''}</div></div>`).join('')}`;
+ ${avgTxt(c,i,sh)}<div class="b"><button onclick="buy(${i})">Compra</button><button onclick="sell(${i})">Vendi</button>${sh?`<button onclick="move(${i},1)">Dep → Nave</button><button onclick="move(${i},-1)">Nave → Dep</button>`:''}</div></div>`).join('')}`;
 },
 navi(){
  const q=[1,10,50,'max'].map(x=>`<button class="${S.ui.qty===x?'on':''}" onclick='setQ(${JSON.stringify(x)})'>${x==='max'?'Max':x}</button>`).join('');
- const lo=s=>{if(blocked(s.city))return `<small>Porto bloccato: non puoi caricare né scaricare.</small>`;if(S.wh[s.city]<=0)return `<small>Nessun deposito a ${s.city}: commercia dal Porto direttamente dalla nave.</small>`;const d=S.dep[s.city];const rows=G.map((g,i)=>(d[i]||s.cargo[i])?`<div class="r" style="margin-top:8px"><span>${g}<br><small>Deposito ${d[i]} · Nave ${s.cargo[i]}</small></span><span class="b" style="margin:0"><button onclick="moveS(${s.id},${i},1)">Carica</button><button onclick="moveS(${s.id},${i},-1)">Scarica</button></span></div>`:'').join('');return `<div class="b"><button onclick="loadAll(${s.id},1)">Carica tutto</button><button onclick="loadAll(${s.id},-1)">Scarica tutto</button></div><small>Deposito di ${s.city}: ${tot(d)}/${S.wh[s.city]}</small>${rows||'<br><small>Nessuna merce da spostare.</small>'}`};
+ const lo=s=>{if(blocked(s.city))return `<small>Porto bloccato: non puoi caricare né scaricare.</small>`;if(S.wh[s.city]<=0)return `<small>Nessun deposito a ${s.city}: commercia dal Porto direttamente dalla nave.</small>`;const d=S.dep[s.city];const rows=G.map((g,i)=>(d[i]||s.cargo[i])?`<div class="r" style="margin-top:8px"><span>${g}<br><small>Deposito ${d[i]}${d[i]?` (≈${avgOf(dc(s.city)[i],d[i]).toFixed(1)} ₯)`:''} · Nave ${s.cargo[i]}${s.cargo[i]?` (≈${avgOf(cb(s)[i],s.cargo[i]).toFixed(1)} ₯)`:''}</small></span><span class="b" style="margin:0"><button onclick="moveS(${s.id},${i},1)">Carica</button><button onclick="moveS(${s.id},${i},-1)">Scarica</button></span></div>`:'').join('');return `<div class="b"><button onclick="loadAll(${s.id},1)">Carica tutto</button><button onclick="loadAll(${s.id},-1)">Scarica tutto</button></div><small>Deposito di ${s.city}: ${tot(d)}/${S.wh[s.city]}</small>${rows||'<br><small>Nessuna merce da spostare.</small>'}`};
  return `<h2>Navi</h2><small>Quantità per carico e scarico:</small><div class="b" style="margin:4px 0 10px">${q}</div>`+(S.ships.map(s=>{
-  const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]}`:'').filter(Boolean).join(', ')||'vuota';
+  const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]} (≈${avgOf(cb(s)[i],s.cargo[i]).toFixed(1)} ₯)`:'').filter(Boolean).join(', ')||'vuota';
   const a=s.dest
    ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${s.arr-S.day} giorni)`
    :`${blocked(s.city)?'Alla fonda davanti a':'Ormeggiata a'} <b>${s.city}</b>${blocked(s.city)?' (porto bloccato)':''}
