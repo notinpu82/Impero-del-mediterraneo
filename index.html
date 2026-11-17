@@ -15,8 +15,8 @@ header{position:fixed;top:0;left:0;right:0;background:#0a141c;border-bottom:1px 
 #top{font:600 17px Georgia,serif;color:var(--gold);display:flex;justify-content:space-between;gap:8px}
 .days{display:flex;gap:6px;margin-top:6px}
 .days button{flex:1;padding:7px 4px}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0a141c;border-top:1px solid var(--line);z-index:5}
-nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 0;font-size:11px;border-radius:0}
+nav{position:fixed;bottom:0;left:0;right:0;overflow-x:auto;display:flex;background:#0a141c;border-top:1px solid var(--line);z-index:5}
+nav button{flex:1 0 auto;background:none;border:0;color:var(--mut);padding:14px 11px;font-size:12px;border-radius:0}
 nav button.on{color:var(--gold);box-shadow:inset 0 3px 0 var(--gold)}
 button,select{font:inherit;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
 button:active{background:var(--line)}
@@ -45,6 +45,7 @@ input{font:inherit;width:100%;color:var(--ink);background:var(--card);border:1px
 <div id="toast"></div>
 <nav>
 <button data-t="porto" onclick="go('porto')">Porto</button>
+<button data-t="mappa" onclick="go('mappa')">Mappa</button>
 <button data-t="navi" onclick="go('navi')">Navi</button>
 <button data-t="mercati" onclick="go('mercati')">Mercati</button>
 <button data-t="cantiere" onclick="go('cantiere')">Cantiere</button>
@@ -127,7 +128,7 @@ const $=s=>document.querySelector(s);
 const fmt=n=>Math.round(n).toLocaleString('it-IT');
 const tot=a=>a.reduce((x,y)=>x+y,0);
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
-let S,speed=0,acc=0;
+let S,speed=0,acc=0,mapScroll=null;
 const CIV=[
 ['Pozzo pubblico',600,0,4,2,0,'Acqua pulita per il quartiere.'],
 ['Cappella',1500,5,8,3,0,'Un piccolo luogo sacro.'],
@@ -164,7 +165,7 @@ for(const c in S.wh)if(S.wh[c]>0)S.wh[c]=Math.ceil(S.wh[c]/250)*250;
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 function toast(t){const e=$('#toast');e.textContent=t;e.style.opacity=1;clearTimeout(window.tt);window.tt=setTimeout(()=>e.style.opacity=0,2200)}
 function done(m){save();render();if(m)toast(m)}
-function go(t){S.ui.tab=t;done();scrollTo(0,0)}
+function go(t){if(t==='mappa')mapScroll=null;S.ui.tab=t;done();scrollTo(0,0)}
 function setQ(x){S.ui.qty=x;done()}
 function setSpeed(n){speed=n;renderSpeed()}
 function start(c){
@@ -448,11 +449,31 @@ function move(i,dir){
  const m=xfer(sh,i,dir,qty());
  done(m?`Spostati ${m} ${G[i]}`:'Nulla da spostare');
 }
-function sail(id){
- const s=S.ships.find(x=>x.id===id),d=$('#d'+id).value,n=days(s.city,d,s);
+function sailTo(id,d){
+ const s=S.ships.find(x=>x.id===id);
+ if(!s||s.dest)return toast('La nave non è libera');
+ if(s.city===d)return toast('La nave è già in questo porto');
+ const n=days(s.city,d,s);
  s.dest=d;s.route=null;s.wait=false;s.next=null;s.st=S.day;s.arr=S.day+n;
  S.log.unshift(`Giorno ${S.day}: la ${s.name} salpa da ${s.city} per ${d} (${n} giorni).`);
- done(`${s.name} in rotta per ${d}`);
+ done(`${s.name} in rotta per ${d}: ${n} giorni`);
+}
+function sail(id){sailTo(id,$('#d'+id).value)}
+function mapPick(c){
+ S.ui.mapSel=c;
+ const fr=S.ships.filter(s=>!s.dest&&s.city!==c);
+ S.ui.mapShip=fr.length===1?fr[0].id:null;
+ done();mapCenter(c);
+}
+function mapShipPick(id){S.ui.mapShip=id;done()}
+function mapGo(){const id=S.ui.mapShip;S.ui.mapShip=null;sailTo(id,S.ui.mapSel)}
+function mapZoom(d){S.ui.mz=Math.max(1,Math.min(4,(S.ui.mz||2)+d));done()}
+function mapOpen(){S.ui.city=S.ui.mapSel;go('porto')}
+function mapCenter(c){
+ const mb=document.getElementById('mapbox');if(!mb||!c)return;
+ mb.scrollLeft=(C[c][1]+2)/43*mb.scrollWidth-mb.clientWidth/2;
+ mb.scrollTop=(47-C[c][2])/17*mb.scrollHeight-mb.clientHeight/2;
+ mapScroll=[mb.scrollLeft,mb.scrollTop];
 }
 function buyShip(t){
  const c=S.ui.city,T0=T[t];
@@ -581,12 +602,47 @@ const dipl=c=>{
  return h;
 };
 const neutCard=()=>`<div class="card"><div class="r"><b>Cittadinanza</b><span class="m">${S.neutral?'Mercante neutrale':FAC[facOf(S.home)]}</span></div><small>${S.neutral?'Le guerre non ti chiudono i porti, ma paghi il 3% in più sugli acquisti.':'Se la tua fazione entra in guerra, i porti nemici si chiudono per te.'}</small><div class="b"><button onclick="toggleNeutral()">${S.neutral?'Riprendi la cittadinanza':'Diventa mercante neutrale'} (5.000 ₯)</button></div></div>`;
+const GEO={"sea":[[-3,35.2],[-3,36.7],[-2.0,36.75],[-1.6,37.2],[-0.7,37.6],[-0.4,38.3],[0.2,38.75],[-0.3,39.4],[0.5,40.2],[0.9,40.7],[1.3,41.1],[2.2,41.35],[3.2,41.9],[3.2,42.4],[3.0,42.9],[3.1,43.3],[4.2,43.55],[4.6,43.4],[5.4,43.28],[6.2,43.1],[6.9,43.4],[7.3,43.7],[8.0,43.85],[8.5,44.1],[8.9,44.4],[9.5,44.3],[9.9,44.0],[10.3,43.55],[10.6,42.9],[11.1,42.4],[12.0,42.0],[12.4,41.7],[13.0,41.3],[13.6,41.2],[14.1,40.8],[14.35,40.6],[14.6,40.62],[14.8,40.68],[15.0,40.4],[15.3,40.03],[15.7,39.95],[16.0,39.3],[16.0,38.7],[15.8,38.25],[15.64,38.1],[16.0,37.93],[16.55,38.45],[17.1,38.9],[17.13,39.1],[16.7,39.7],[17.0,40.3],[17.2,40.47],[18.0,40.4],[18.35,39.8],[18.5,40.15],[17.95,40.65],[17.0,41.1],[16.2,41.55],[16.2,41.95],[15.0,42.0],[14.2,42.45],[13.6,43.4],[13.5,43.62],[12.9,43.9],[12.57,44.06],[12.3,44.45],[12.3,45.0],[12.33,45.44],[13.0,45.65],[13.77,45.65],[13.6,45.1],[13.85,44.85],[14.3,45.2],[14.5,45.0],[15.0,44.5],[15.2,44.12],[16.0,43.7],[16.44,43.51],[17.2,43.1],[17.5,42.9],[18.1,42.65],[18.7,42.2],[19.1,42.1],[19.45,41.32],[19.45,40.45],[19.9,40.0],[20.2,39.5],[20.7,38.95],[21.0,38.3],[21.7,38.25],[21.1,37.9],[21.6,37.6],[21.7,36.8],[22.1,36.6],[22.48,36.38],[23.2,36.43],[23.05,36.69],[22.8,37.2],[22.8,37.57],[23.2,37.65],[23.0,37.9],[23.6,37.95],[24.0,37.65],[24.1,38.1],[23.7,38.5],[23.0,38.9],[22.95,39.35],[22.6,40.1],[22.94,40.64],[23.4,40.2],[24.3,40.15],[24.4,40.94],[25.0,40.85],[25.9,40.85],[26.05,40.72],[26.18,40.05],[26.15,39.95],[26.1,39.5],[26.7,39.3],[26.7,38.9],[27.1,38.4],[26.3,38.3],[27.25,37.85],[27.4,37.03],[28.27,36.85],[29.1,36.6],[30.0,36.2],[30.7,36.85],[31.5,36.75],[32.8,36.05],[33.8,36.2],[34.6,36.75],[35.5,36.6],[36.1,36.65],[36.2,36.0],[35.8,35.5],[35.8,34.5],[35.5,33.9],[35.2,33.27],[35.08,32.93],[34.75,32.1],[34.5,31.55],[34.2,31.3],[32.3,31.25],[31.8,31.45],[30.4,31.4],[29.9,31.2],[28.9,30.95],[27.2,31.35],[25.2,31.6],[23.98,32.08],[22.64,32.77],[21.0,32.8],[20.1,32.1],[19.8,30.9],[18.0,30.4],[16.6,31.2],[15.1,32.4],[13.2,32.9],[12.0,32.9],[11.0,33.4],[10.1,34.0],[10.76,34.74],[10.64,35.82],[11.05,37.08],[10.3,36.8],[9.85,37.28],[8.2,36.95],[5.5,36.9],[4.0,36.9],[3.06,36.77],[2.0,36.6],[1.3,36.5],[0.1,35.95],[-0.6,35.7],[-1.3,35.3],[-2.0,35.15],[-3,35.15]],"black":[[29.1,41.2],[28.0,41.9],[27.5,42.5],[27.9,43.2],[28.7,44.1],[29.6,45.2],[29.7,45.4],[30.7,46.5],[32.0,46.5],[33.2,46.1],[33.1,45.5],[32.6,45.4],[33.0,44.7],[33.5,44.5],[34.5,44.5],[35.4,45.0],[36.4,45.3],[37.3,44.9],[38.0,44.1],[39.5,43.5],[41.5,42.0],[41.6,41.6],[39.7,41.0],[38.0,40.95],[36.5,41.4],[35.2,42.0],[33.5,42.0],[32.0,41.5],[31.0,41.1]],"strait":[[26.2,40.05],[26.7,40.4],[27.6,40.7],[28.5,40.75],[29.0,40.9],[29.1,41.2]],"isl":[[[8.6,42.4],[9.35,43.0],[9.55,42.4],[9.4,41.8],[9.2,41.4],[8.7,41.6],[8.55,42.0]],[[8.2,40.9],[9.2,41.25],[9.8,40.5],[9.65,39.6],[9.5,39.2],[9.0,39.0],[8.4,39.1],[8.4,39.7],[8.15,40.4]],[[12.4,37.9],[13.0,38.2],[13.4,38.15],[14.0,38.05],[15.0,38.25],[15.6,38.27],[15.2,37.5],[15.15,36.7],[14.4,36.75],[13.4,37.1],[12.5,37.6]],[[23.5,35.5],[24.1,35.6],[25.15,35.35],[26.3,35.3],[26.2,35.0],[25.0,34.95],[24.0,35.2],[23.5,35.2]],[[32.3,35.05],[32.9,35.4],[33.3,35.35],[34.0,35.7],[34.6,35.65],[34.0,35.1],[34.08,34.96],[33.6,34.9],[33.0,34.65],[32.4,34.7],[32.3,35.05]],[[2.35,39.6],[2.7,39.85],[3.4,39.95],[3.45,39.6],[3.0,39.35],[2.5,39.35]],[[3.8,39.95],[4.3,40.05],[4.3,39.85],[3.85,39.85]],[[27.8,36.3],[28.25,36.45],[28.2,36.15],[27.8,35.95]],[[25.9,38.5],[26.2,38.6],[26.15,38.2],[25.95,38.2]],[[19.7,39.75],[19.95,39.8],[20.1,39.5],[19.85,39.4]]]};
+const FCOL={Venezia:'#e5534b',Genova:'#e6c229',Pisa:'#9b7bd8',Amalfi:'#39b36a',Ragusa:'#20a8a8',Sicilia:'#f08a3c',Provenza:'#4a90e2',Aragona:'#d1478c',Hafsidi:'#7fbf3f',Bizantino:'#a05fd0',Cipro:'#40c0e0',Gerusalemme:'#e8e0c8',Mamelucco:'#a47c52',N:'#9aa5ad'};
+const MX=lo=>(lo+2)*16.3,MY=la=>(47-la)*21.7;
+const pts=a=>a.map(p=>MX(p[0]).toFixed(1)+','+MY(p[1]).toFixed(1)).join(' ');
+function mapSvg(){
+ const z=S.ui.mz||2,sel=S.ui.mapSel,sh=S.ui.mapShip?S.ships.find(x=>x.id===S.ui.mapShip):null;
+ const pos=c=>[MX(C[c][1]),MY(C[c][2])];
+ let o=`<svg viewBox="0 0 700 370" style="width:${z*100}%;display:block;background:#27404f"><polygon points="${pts(GEO.sea)}" fill="#0f2a3d"/><polygon points="${pts(GEO.black)}" fill="#0f2a3d"/><polyline points="${pts(GEO.strait)}" fill="none" stroke="#0f2a3d" stroke-width="5" stroke-linecap="round"/>`;
+ GEO.isl.forEach(q=>{o+=`<polygon points="${pts(q)}" fill="#27404f" stroke="#3c5a6e" stroke-width=".6"/>`});
+ if(sh&&sel&&sh.city!==sel){const a=pos(sh.city),b=pos(sel);o+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e8eef2" stroke-width="1" stroke-dasharray="3 3"/>`}
+ for(const s of S.ships)if(s.dest){
+  const a=pos(s.city),b=pos(s.dest),f=Math.max(0,Math.min(1,(S.day-(s.st||0))/Math.max(1,s.arr-(s.st||0)))),x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f;
+  o+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e0b252" stroke-width=".8" stroke-dasharray="2 3" opacity=".7"/><circle cx="${x}" cy="${y}" r="3" fill="#fff" stroke="#e0b252" stroke-width="1.2"/>${z>=2?`<text x="${x+4}" y="${y-4}" font-size="5" fill="#e0b252">${s.name}</text>`:''}`;
+ }
+ for(const c of Object.keys(C)){
+  const [x,y]=pos(c),bl=blocked(c),n=S.ships.filter(s=>s.city===c&&!s.dest).length;
+  o+=`<g onclick="mapPick('${c}')"><circle cx="${x}" cy="${y}" r="9" fill="transparent"/>${c===sel?`<circle cx="${x}" cy="${y}" r="7" fill="none" stroke="#e0b252" stroke-width="1.5"/>`:''}<circle cx="${x}" cy="${y}" r="3.2" fill="${FCOL[facOf(c)]}" stroke="${bl?'#ff4d4d':'#0a141c'}" stroke-width="${bl?1.6:.8}"/>${n?`<circle cx="${x+5}" cy="${y-5}" r="3.4" fill="#fff"/><text x="${x+5}" y="${y-3.6}" font-size="4.6" text-anchor="middle" fill="#0a141c" font-weight="700">${n}</text>`:''}${(z>=2||c===sel)?`<text x="${x+5}" y="${y+7}" font-size="${c===sel?7:5.6}" fill="${c===sel?'#e0b252':'#e8eef2'}">${c}${bl?' ⛔':''}</text>`:''}</g>`;
+ }
+ return o+'</svg>';
+}
+function mapPanel(){
+ const c=S.ui.mapSel;
+ if(!c)return `<div class="card"><small>Tocca una città sulla mappa per scegliere quale nave mandare.</small></div>`;
+ const free=S.ships.filter(s=>!s.dest&&s.city!==c),there=S.ships.filter(s=>s.city===c&&!s.dest),moving=S.ships.filter(s=>s.dest),sel=S.ui.mapShip;
+ return `<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
+ <small>${blocked(c)?'⛔ '+blkMsg(c)+'<br>':''}Abitanti ${fmt(S.popu[c]*1000)} · popolarità ${(S.pop[c]||0).toFixed(0)}${there.length?'<br>Tue navi qui: '+there.map(s=>s.name).join(', '):''}</small>
+ ${free.length?`<div style="margin-top:8px"><small>Quale nave mandare?</small></div>`+free.map(s=>`<div class="card" style="margin:6px 0;${sel===s.id?'border-color:var(--gold);background:#1d3a4d':''}" onclick="mapShipPick(${s.id})"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><small>Da ${s.city}: ${days(s.city,c,s)} giorni (${nm(s.city,c)} mn)${blocked(s.city)?' · alla fonda':''}</small></div>`).join(''):'<br><small>Nessuna nave libera da mandare qui.</small>'}
+ <div class="b"><button onclick="mapGo()" ${sel&&free.some(s=>s.id===sel)?'':'disabled'}>OK, salpa per ${c}</button><button onclick="mapOpen()">Apri porto</button></div>
+ ${moving.length?`<small>In viaggio: ${moving.map(s=>`${s.name} → ${s.dest} (arrivo giorno ${s.arr})`).join(' · ')}</small>`:''}</div>`;
+}
 const P={
 inizio(){
  return `<h2>Il tuo nome</h2><input id="nm" maxlength="24" placeholder="Come ti chiami, mercante?" autocomplete="off"><h2>Scegli dove vivere</h2><small>Parti da qui con 1.500 ₯ e una Cocca. All’inizio non hai magazzini: commerci direttamente dalla nave, poi potrai affittarne uno dal mastro del porto.</small><div style="height:8px"></div>`+
  Object.keys(C).map(c=>`<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
  <small>Produce: ${prodTxt(c)}<br>Importa: ${needTxt(c)}<br>Abitanti: ${fmt(C[c][5]*1000)}</small>
  <div class="b"><button onclick="start('${c}')">Inizia a ${c}</button></div></div>`).join('');
+},
+mappa(){
+ const z=S.ui.mz||2;
+ const leg=Object.keys(FAC).map(f=>`<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><i style="width:9px;height:9px;border-radius:50%;background:${FCOL[f]};display:inline-block"></i><small>${FAC[f]}</small></span>`).join('');
+ return `<h2>Mappa</h2><div class="b" style="margin:0 0 8px"><button onclick="mapZoom(-1)" ${z<=1?'disabled':''}>−</button><button onclick="mapZoom(1)" ${z>=4?'disabled':''}>+</button></div><div id="mapbox" style="overflow:auto;max-height:55vh;border:1px solid var(--line);border-radius:10px">${mapSvg()}</div><div style="margin:8px 0">${leg}</div>${mapPanel()}`;
 },
 porto(){
  const u=S.ui,c=u.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c];
@@ -674,7 +730,9 @@ function render(keep){
  renderTop();renderSpeed();
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===u.tab));
  const sv=[...document.querySelectorAll('#main select')].map(s=>s.value);
+ const mb=document.getElementById('mapbox');if(mb)mapScroll=[mb.scrollLeft,mb.scrollTop];
  $('#main').innerHTML=S.started?P[u.tab]():P.inizio();
+ const mb2=document.getElementById('mapbox');if(mb2){if(mapScroll===null)mapCenter(S.ui.mapSel||(S.ships[0]&&S.ships[0].city)||S.home);else{mb2.scrollLeft=mapScroll[0];mb2.scrollTop=mapScroll[1]}}
  if(keep)[...document.querySelectorAll('#main select')].forEach((s,i)=>{if(sv[i]!==undefined&&[...s.options].some(o=>o.value===sv[i]||o.text===sv[i]))s.value=sv[i]});
 }
 render();
