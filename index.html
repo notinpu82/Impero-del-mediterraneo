@@ -125,10 +125,11 @@ const NAMES=['San Marco','Stella Maris','Leone Alato','Sant’Elena','Fortuna','
 const RANKS=[['Venditore ambulante',0],['Bottegaio',25000],['Mercante',60000],['Armatore',150000],['Patrizio',350000],['Consigliere',800000],['Console',1800000],['Doge',4000000]];
 const KEY='mercanti_med_v5';
 const $=s=>document.querySelector(s);
+const gg=n=>n===1?'1 giorno':n+' giorni';
 const fmt=n=>Math.round(n).toLocaleString('it-IT');
 const tot=a=>a.reduce((x,y)=>x+y,0);
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
-let S,speed=0,acc=0,mapScroll=null;
+let S,speed=0,acc=0,mapScroll=null,mapFocusPt=null;
 const CIV=[
 ['Pozzo pubblico',600,0,4,2,0,'Acqua pulita per il quartiere.'],
 ['Cappella',1500,5,8,3,0,'Un piccolo luogo sacro.'],
@@ -456,7 +457,7 @@ function sailTo(id,d){
  const n=days(s.city,d,s);
  s.dest=d;s.route=null;s.wait=false;s.next=null;s.st=S.day;s.arr=S.day+n;
  S.log.unshift(`Giorno ${S.day}: la ${s.name} salpa da ${s.city} per ${d} (${n} giorni).`);
- done(`${s.name} in rotta per ${d}: ${n} giorni`);
+ done(`${s.name} in rotta per ${d}: ${gg(n)}`);
 }
 function sail(id){sailTo(id,$('#d'+id).value)}
 function mapPick(c){
@@ -469,11 +470,18 @@ function mapShipPick(id){S.ui.mapShip=id;done()}
 function mapGo(){const id=S.ui.mapShip;S.ui.mapShip=null;sailTo(id,S.ui.mapSel)}
 function mapZoom(d){S.ui.mz=Math.max(1,Math.min(4,(S.ui.mz||2)+d));done()}
 function mapOpen(){S.ui.city=S.ui.mapSel;go('porto')}
-function mapCenter(c){
- const mb=document.getElementById('mapbox');if(!mb||!c)return;
- mb.scrollLeft=(C[c][1]+2)/43*mb.scrollWidth-mb.clientWidth/2;
- mb.scrollTop=(47-C[c][2])/17*mb.scrollHeight-mb.clientHeight/2;
+function mapCenterXY(x,y){
+ const mb=document.getElementById('mapbox');if(!mb)return;
+ mb.scrollLeft=(x+14)/728*mb.scrollWidth-mb.clientWidth/2;
+ mb.scrollTop=(y+14)/398*mb.scrollHeight-mb.clientHeight/2;
  mapScroll=[mb.scrollLeft,mb.scrollTop];
+}
+function mapCenter(c){if(c)mapCenterXY(MX(C[c][1]),MY(C[c][2]))}
+function mapFocus(id){
+ const s=S.ships.find(x=>x.id===id);if(!s)return;
+ let pt=[MX(C[s.city][1]),MY(C[s.city][2])];
+ if(s.dest)pt=along(routeXY(s.city,s.dest),progOf(s));
+ if(S.ui.tab==='mappa'){done();mapCenterXY(pt[0],pt[1])}else{mapFocusPt=pt;go('mappa')}
 }
 function buyShip(t){
  const c=S.ui.city,T0=T[t];
@@ -643,8 +651,30 @@ function along(p,f){
  for(let i=0;i<d.length;i++){if(t<=d[i]||i===d.length-1){const u=d[i]?Math.min(1,t/d[i]):1;return [p[i][0]+(p[i+1][0]-p[i][0])*u,p[i][1]+(p[i+1][1]-p[i][1])*u]}t-=d[i]}
  return p[p.length-1];
 }
-const MT=[[[6.8,45.4],[7.8,46.0],[9.0,46.4],[10.5,46.6],[12.2,46.7],[13.8,46.5]],[[8.9,44.6],[10.4,44.2],[11.8,43.4],[13.2,42.4],[14.4,41.6],[15.7,40.4],[16.2,39.3],[16.0,38.4]],[[-1.6,42.9],[0,42.7],[1.6,42.5],[2.8,42.5]],[[-1.8,41.3],[-1.0,40.5],[-0.9,39.8]],[[14.5,45.3],[16.0,44.4],[17.5,43.6],[18.8,42.9],[19.6,42.2]],[[20.5,40.6],[21.0,39.8],[21.3,39.0],[21.7,38.4]],[[22.6,42.9],[24.5,42.6],[26.5,42.8]],[[-1.8,34.6],[0.5,34.9],[3.0,35.4],[5.5,35.7],[7.5,35.5],[9.5,35.8]],[[30.2,37.5],[32.0,37.4],[34.0,37.6],[36.0,38.0]],[[33.5,41.0],[35.5,40.8],[37.5,40.5]],[[35.9,34.1],[36.0,33.3]],[[15.0,37.75],[15.0,37.7]],[[9.0,42.2],[9.0,42.0]],[[9.2,40.1],[9.2,39.9]],[[24.6,35.2],[24.7,35.2]]];
+const MT=[[[6.8,45.4],[7.8,46.0],[9.0,46.4],[10.5,46.6],[12.2,46.7],[13.8,46.5]],[[8.9,44.6],[10.4,44.2],[11.8,43.4],[13.2,42.4],[14.4,41.6],[15.7,40.4],[16.2,39.3],[16.0,38.4]],[[-1.6,42.9],[0,42.7],[1.6,42.5],[2.8,42.5]],[[-1.8,41.3],[-1.0,40.5],[-0.9,39.8]],[[-1.8,38.2],[-1.0,38.9]],[[14.5,45.3],[16.0,44.4],[17.5,43.6],[18.8,42.9],[19.6,42.2]],[[20.5,40.6],[21.0,39.8],[21.3,39.0],[21.7,38.4]],[[22.6,42.9],[24.5,42.6],[26.5,42.8]],[[-1.8,34.6],[0.5,34.9],[3.0,35.4],[5.5,35.7],[7.5,35.5],[9.5,35.8]],[[30.2,37.5],[32.0,37.4],[34.0,37.6],[36.0,38.0]],[[33.5,41.0],[35.5,40.8],[37.5,40.5]],[[35.9,34.1],[36.0,33.3]],[[15.0,37.75],[15.0,37.7]],[[9.0,42.2],[9.0,42.0]],[[9.2,40.1],[9.2,39.9]],[[24.6,35.2],[24.7,35.2]]];
 const RIVER=[[[30.4,31.4],[31.0,30.4],[31.3,30.0]],[[4.7,43.4],[4.8,44.6],[4.9,45.6]],[[7.4,45.0],[9.5,45.1],[11.5,45.0],[12.3,44.95]],[[0.9,40.7],[-0.5,41.5],[-1.8,42.0]],[[29.7,45.3],[26.5,44.2],[23.5,44.0],[21.0,44.7]]];
+// regioni colorate ad acquerello (ordine di disegno: dal generale al particolare)
+const REG=[
+['#e7b9a3',[[13.5,47.6],[13.5,42],[19.5,39.5],[22,41],[22.5,44.2],[28.5,44.2],[28.5,47.6]]],
+['#f1d96e',[[-3,42.6],[-3,48],[7.3,48],[7.4,46],[6.9,44.2],[7.6,43.6],[5.4,43.2],[3.3,43.2],[3.2,42.4]]],
+['#e8bdae',[[-3,43.4],[1.8,42.7],[3.2,42.4],[3.8,41],[2,37],[-3,34]]],
+['#bad690',[[6.8,44],[7.3,46],[10,47.2],[14.2,47.2],[14.2,45.5],[19,40.2],[19.5,39],[16.2,37.5],[14,37],[11,41],[9,43.5]]],
+['#e59a88',[[12,36.6],[12,38.6],[15.9,38.6],[15.9,36.6]]],
+['#d3e08c',[[8.4,41.2],[8.4,43.2],[9.8,43.2],[9.8,41.2]]],
+['#efe39c',[[8,38.8],[8,41.4],[10,41.4],[10,38.8]]],
+['#e49a8d',[[19,40.5],[19,36],[24.8,36],[24.8,39.2],[23,41],[21,42]]],
+['#efc29e',[[21,42.2],[21,44.2],[29,44.2],[29,40.8],[24,40.2],[23,40.7]]],
+['#ecd97b',[[25.8,35.5],[25.8,42.2],[41.8,42.2],[41.8,35.8],[36.2,36.3],[30,35.5]]],
+['#d7d27c',[[35.5,37.2],[41.8,37.2],[41.8,30.5],[34,30.5],[34.3,31.5]]],
+['#eeb095',[[-3,29.5],[-3,37.4],[8.4,37.4],[8.6,29.5]]],
+['#f0b99a',[[8.4,29.5],[8.4,37.6],[12.2,37.6],[15.5,32.4],[19,31],[19,29.5]]],
+['#ecae8e',[[15.5,29.5],[15.5,32.6],[19,31.5],[25.3,32.2],[25.3,29.5]]],
+['#e9a77f',[[25.3,29.5],[25.3,32.6],[34.6,32.6],[34.6,29.5]]],
+['#e9b3a0',[[23,34.6],[23,36],[26.6,36],[26.6,34.6]]],
+['#e8a8a0',[[32,34.4],[32,35.9],[34.9,35.9],[34.9,34.4]]],
+['#e5c9a3',[[2,39.2],[2,40.2],[4.5,40.2],[4.5,39.2]]]
+];
+const SCOL=['#b5301f','#1f5fa8','#2e7d32','#8e44ad','#d35400','#00838f'];
 let MAPB='';
 function smoothPath(a,k){
  const P=a.map(q=>[MX(q[0]),MY(q[1])]),n=P.length,f=x=>x.toFixed(1);
@@ -655,81 +685,99 @@ function smoothPath(a,k){
  }
  return d+'Z';
 }
-function ridge(pl,sp,sz){
- const P=pl.map(q=>[MX(q[0]),MY(q[1])]),f=x=>x.toFixed(1);let d1='',d2='',carry=0;
+function hills(pl,sp,sz){
+ const P=pl.map(q=>[MX(q[0]),MY(q[1])]),f=x=>x.toFixed(1);let d='',carry=0;
  for(let i=1;i<P.length;i++){
   const dx=P[i][0]-P[i-1][0],dy=P[i][1]-P[i-1][1],l=Math.hypot(dx,dy);let t=carry;
   while(t<l){
    const x=P[i-1][0]+dx*t/l,y=P[i-1][1]+dy*t/l,j=Math.sin(x*12.9+y*78.2)*1.2,s=sz*(.8+.4*Math.abs(Math.sin(x*3.1+y*1.7))),px=x+j,py=y+j*.6;
-   d1+='M'+f(px-s)+','+f(py+s*.7)+'L'+f(px)+','+f(py-s)+'L'+f(px+s)+','+f(py+s*.7)+'Z';
-   d2+='M'+f(px)+','+f(py-s)+'L'+f(px+s)+','+f(py+s*.7)+'L'+f(px+s*.25)+','+f(py+s*.7)+'Z';
+   d+='M'+f(px-s)+','+f(py)+'Q'+f(px)+','+f(py-1.8*s)+' '+f(px+s)+','+f(py)+'M'+f(px+.1*s)+','+f(py-.95*s)+'l'+f(.55*s)+','+f(.8*s)+'M'+f(px+.4*s)+','+f(py-1.15*s)+'l'+f(.45*s)+','+f(1.05*s)+'M'+f(px-.35*s)+','+f(py-.6*s)+'l'+f(.4*s)+','+f(.55*s);
    t+=sp;
   }
   carry=t-l;
  }
- return [d1,d2];
-}
-function compass(cx,cy,r){
- let o=`<g transform="translate(${cx},${cy})"><circle r="${r}" fill="rgba(8,28,48,.4)" stroke="#f2e8c4" stroke-width=".8"/><circle r="${r*.72}" fill="none" stroke="#f2e8c4" stroke-width=".4" opacity=".7"/>`;
- for(let k=0;k<8;k++){
-  const a=k*Math.PI/4,card=k%2===0,len=card?r*1.35:r*.95,w=card?r*.16:r*.12;
-  const tx=Math.sin(a)*len,ty=-Math.cos(a)*len,bx=Math.sin(a+Math.PI/2)*w,by=-Math.cos(a+Math.PI/2)*w,g=x=>x.toFixed(1);
-  o+=`<path d="M${g(tx)},${g(ty)}L${g(bx)},${g(by)}L0,0Z" fill="${card?'#f2e8c4':'#b9a870'}" stroke="#2b2110" stroke-width=".3"/><path d="M${g(tx)},${g(ty)}L${g(-bx)},${g(-by)}L0,0Z" fill="${card?'#8d7a45':'#7b6c3c'}" stroke="#2b2110" stroke-width=".3"/>`;
- }
- return o+`<text y="${-r*1.5}" font-size="${r*.55}" text-anchor="middle" fill="#f2e8c4" font-family="Georgia,serif" font-weight="700">N</text></g>`;
+ return d;
 }
 function mapBase(){
  if(MAPB)return MAPB;
  const land='M-60,-60H760V430H-60Z'+smoothPath(GEO.sea,.9)+smoothPath(GEO.black,.9)+GEO.isl.map(q=>smoothPath(q,.9)).join('');
- const lab=(t,lo,la,sz,rot,col,sp)=>`<text x="${MX(lo).toFixed(1)}" y="${MY(la).toFixed(1)}" font-size="${sz}" fill="${col}" text-anchor="middle" font-family="Georgia,serif" font-style="italic" letter-spacing="${sp}" transform="rotate(${rot} ${MX(lo).toFixed(1)} ${MY(la).toFixed(1)})">${t}</text>`;
- let rh='';for(let k=0;k<16;k++){const a=k*Math.PI/8;rh+=`<line x1="${MX(15.8)}" y1="${MY(33.8)}" x2="${(MX(15.8)+Math.sin(a)*1200).toFixed(0)}" y2="${(MY(33.8)-Math.cos(a)*1200).toFixed(0)}"/>`}
- let m1='',m2='';MT.forEach(pl=>{const [a,b]=ridge(pl,pl.length<3?1:6.5,3.1);m1+=a;m2+=b});
+ const f=x=>x.toFixed(1);
+ const lab=(t,lo,la,sz,rot,col,sp,it)=>`<text x="${f(MX(lo))}" y="${f(MY(la))}" font-size="${sz}" fill="${col}" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" ${it?'font-style="italic"':''} letter-spacing="${sp}" transform="rotate(${rot} ${f(MX(lo))} ${f(MY(la))})">${t}</text>`;
+ let h='';MT.forEach(pl=>{h+=hills(pl,pl.length<3?1:5.8,2.9)});
  const rv=RIVER.map(pl=>`<polyline points="${rpts(pl.map(q=>[MX(q[0]),MY(q[1])]))}"/>`).join('');
- const sea='rgba(255,255,255,.34)',land2='rgba(45,32,10,.38)';
+ const regs=REG.map(r=>`<polygon points="${rpts(r[1].map(q=>[MX(q[0]),MY(q[1])]))}" fill="${r[0]}" fill-opacity=".9"/>`).join('');
+ const regl=REG.map(r=>`<polygon points="${rpts(r[1].map(q=>[MX(q[0]),MY(q[1])]))}" fill="none"/>`).join('');
+ const seaC='#2f6f78',landC='#5a3d1e';
  MAPB=`<defs>
-<linearGradient id="gsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14527c"/><stop offset=".55" stop-color="#0f4570"/><stop offset="1" stop-color="#0a3558"/></linearGradient>
-<linearGradient id="gland" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="370"><stop offset="0" stop-color="#4c7a3b"/><stop offset=".3" stop-color="#6c9047"/><stop offset=".5" stop-color="#a0a359"/><stop offset=".72" stop-color="#c9ae71"/><stop offset="1" stop-color="#dbc084"/></linearGradient>
-<pattern id="wv" width="15" height="9" patternUnits="userSpaceOnUse"><path d="M0,4.5q3.75,-3 7.5,0t7.5,0" fill="none" stroke="rgba(255,255,255,.09)" stroke-width=".6"/></pattern>
-<pattern id="st" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".4" fill="rgba(30,45,15,.16)"/><circle cx="3.6" cy="3.3" r=".35" fill="rgba(255,255,230,.12)"/></pattern>
-<radialGradient id="vg" cx=".5" cy=".5" r=".78"><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
+<clipPath id="cc"><rect x="0" y="0" width="700" height="370"/></clipPath>
+<clipPath id="lc"><path clip-rule="evenodd" d="${land}"/></clipPath>
+<pattern id="gr" width="3.7" height="3.1" patternUnits="userSpaceOnUse"><circle cx=".6" cy=".7" r=".3" fill="rgba(90,60,20,.1)"/><circle cx="2.4" cy="2.1" r=".22" fill="rgba(90,60,20,.08)"/></pattern>
+<radialGradient id="vg" cx=".5" cy=".5" r=".8"><stop offset=".6" stop-color="#7a5524" stop-opacity="0"/><stop offset="1" stop-color="#7a5524" stop-opacity=".3"/></radialGradient>
+<path id="mp" d="M${f(MX(11.2))},${f(MY(35.3))}Q${f(MX(20))},${f(MY(32.6))} ${f(MX(31.6))},${f(MY(33.5))}"/>
 </defs>
-<rect x="-10" y="-10" width="720" height="390" fill="url(#gsea)"/><rect x="-10" y="-10" width="720" height="390" fill="url(#wv)"/>
-<g stroke="rgba(255,255,255,.07)" stroke-width=".5">${rh}</g>
-<path d="${land}" fill="none" stroke="#49c4d6" stroke-width="15" stroke-opacity=".13" stroke-linejoin="round" fill-rule="evenodd"/>
-<path d="${land}" fill="none" stroke="#56d0dc" stroke-width="9" stroke-opacity=".17" stroke-linejoin="round" fill-rule="evenodd"/>
-<path d="${land}" fill="none" stroke="#7fe0e0" stroke-width="4.5" stroke-opacity=".24" stroke-linejoin="round" fill-rule="evenodd"/>
-<path d="${land}" fill="url(#gland)" fill-rule="evenodd"/><path d="${land}" fill="url(#st)" fill-rule="evenodd"/>
-<path d="${land}" fill="none" stroke="#efe3b6" stroke-width="1.7" stroke-opacity=".6" stroke-linejoin="round" fill-rule="evenodd"/><path d="${land}" fill="none" stroke="#33290f" stroke-width=".55" stroke-linejoin="round" fill-rule="evenodd"/>
-<polyline points="${rpts(GEO.strait.map(q=>[MX(q[0]),MY(q[1])]))}" fill="none" stroke="#0f4570" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<g fill="none" stroke="#5fb3d0" stroke-width=".9" stroke-opacity=".85" stroke-linejoin="round">${rv}</g>
-<path d="${m1}" fill="#a4936a" stroke="#4a3f25" stroke-width=".35"/><path d="${m2}" fill="#6c5f3f" opacity=".85"/>
-${compass(MX(15.8),MY(33.8),17)}
-${lab('MARE MEDITERRANEO',21.3,33.7,9.5,0,'rgba(255,255,255,.3)',3)}${lab('MAR TIRRENO',11.9,39.7,6,-18,'rgba(255,255,255,.3)',1.5)}${lab('MARE ADRIATICO',15.8,42.6,6,42,'rgba(255,255,255,.3)',1.5)}${lab('MAR IONIO',18.6,37.4,6.5,0,'rgba(255,255,255,.3)',2)}${lab('MAR EGEO',24.8,38.1,5.5,0,'rgba(255,255,255,.3)',1.5)}${lab('MAR NERO',34.4,43.2,8,0,'rgba(255,255,255,.3)',2.5)}${lab('MAR LIGURE',7.2,42.5,5,-12,'rgba(255,255,255,.3)',1)}${lab('MAR DI SARDEGNA',5.0,39.3,5.5,0,'rgba(255,255,255,.28)',1)}
-${lab('ITALIA',11.6,43.6,6.5,48,land2,2)}${lab('FRANCIA',2.8,45.2,8,0,land2,3)}${lab('IBERIA',-0.3,41.4,6,0,land2,2)}${lab('BALCANI',21.2,43.4,7.5,0,land2,3)}${lab('GRECIA',22.1,39.2,5.5,-70,land2,1)}${lab('ANATOLIA',33.2,39.1,8,0,land2,3)}${lab('MAGREB',5.2,34.2,8,0,land2,3)}${lab('LIBIA',21.5,31.4,8,0,land2,3)}${lab('EGITTO',29.5,30.3,8,0,land2,3)}${lab('SIRIA',38.4,34.5,7.5,0,land2,3)}
-<rect width="700" height="370" fill="url(#vg)"/>
-<rect x="2" y="2" width="696" height="366" fill="none" stroke="#e8d79a" stroke-width="1.6"/><rect x="5" y="5" width="690" height="360" fill="none" stroke="#e8d79a" stroke-width=".5"/>
-<g><rect x="10" y="10" width="112" height="18" rx="2" fill="#d8c38a" stroke="#4a3a17" stroke-width=".8"/><text x="66" y="22.5" font-size="9" text-anchor="middle" fill="#3a2c0e" font-family="Georgia,serif" font-style="italic">Mare Nostrum</text></g>`;
+<rect x="-14" y="-14" width="728" height="398" fill="#efe3c4"/>
+<g clip-path="url(#cc)">
+<rect x="-10" y="-10" width="720" height="390" fill="#d9ebe5"/>
+<path d="${land}" fill="none" stroke="#6fb9b6" stroke-width="16" stroke-opacity=".15" stroke-linejoin="round" fill-rule="evenodd"/>
+<path d="${land}" fill="none" stroke="#6fb9b6" stroke-width="9" stroke-opacity=".2" stroke-linejoin="round" fill-rule="evenodd"/>
+<path d="${land}" fill="none" stroke="#5fb0ad" stroke-width="4.5" stroke-opacity=".28" stroke-linejoin="round" fill-rule="evenodd"/>
+<path d="${land}" fill="none" stroke="#3f8f95" stroke-width="3.2" stroke-opacity=".5" stroke-dasharray=".6 1.8" stroke-linejoin="round" fill-rule="evenodd"/>
+<g clip-path="url(#lc)"><rect x="-10" y="-10" width="720" height="390" fill="#ecdfbd"/>${regs}<g stroke="#8a4b1d" stroke-width=".5" stroke-dasharray=".8 1.6" opacity=".55">${regl}</g><path d="${land}" fill="none" stroke="#8a5a2b" stroke-width="5" stroke-opacity=".28" fill-rule="evenodd"/></g>
+<path d="${land}" fill="none" stroke="#3b2c1a" stroke-width=".65" stroke-linejoin="round" fill-rule="evenodd"/>
+<polyline points="${rpts(GEO.strait.map(q=>[MX(q[0]),MY(q[1])]))}" fill="none" stroke="#d9ebe5" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="none" stroke="#4f78a8" stroke-width=".6" stroke-opacity=".85" stroke-linejoin="round">${rv}</g>
+<path d="${h}" fill="none" stroke="#6b5a3e" stroke-width=".42" stroke-linecap="round"/>
+<text font-size="13" fill="${seaC}" fill-opacity=".85" font-family="Georgia,'Times New Roman',serif" letter-spacing="9"><textPath href="#mp" startOffset="50%" text-anchor="middle">MARE MEDITERRANEO</textPath></text>
+${lab('MAR TIRRENO',11.9,39.7,6.5,-18,seaC,2,1)}${lab('MARE ADRIATICO',15.8,42.6,6.5,42,seaC,2,1)}${lab('MAR IONIO',18.6,37.3,7,0,seaC,3,1)}${lab('ARCIPELAGO',25.0,38.1,5.5,0,seaC,1.5,1)}${lab('MAR NERO',34.4,43.4,9,0,seaC,4,0)}${lab('ossia Ponto Eusino',34.4,42.7,5.5,0,seaC,.5,1)}${lab('MAR LIGURE',7.2,42.5,5,-12,seaC,1,1)}${lab('MAR DI SARDEGNA',5.0,39.3,5.5,0,seaC,1.5,1)}
+${lab('FRANCIA',2.8,45.3,9,0,landC,4,0)}${lab('SPAGNA',-0.4,40.6,8,-35,landC,3,0)}${lab('ITALIA',11.7,43.5,7,48,landC,3,0)}${lab('BALCANI',21.2,44.2,8,0,landC,4,0)}${lab('GRECIA',21.9,39.0,5.5,-70,landC,1.5,0)}${lab('TRACIA',25.8,42.9,6.5,0,landC,3,0)}${lab('ANATOLIA',33.2,39.1,9,0,landC,4,0)}${lab('MAGREB',4.5,33.6,9,0,landC,4,0)}${lab('LIBIA',17.5,30.4,9,0,landC,4,0)}${lab('EGITTO',29.8,30.3,8,0,landC,4,0)}${lab('SIRIA',38.4,34.3,8,0,landC,3,0)}
+<g><rect x="12" y="318" width="124" height="42" fill="#f4ead0" stroke="#3b2c1a" stroke-width=".9"/><rect x="15" y="321" width="118" height="36" fill="none" stroke="#3b2c1a" stroke-width=".4"/><text x="74" y="333" font-size="7.4" text-anchor="middle" fill="#2a1a08" font-family="Georgia,serif" letter-spacing=".8">IL MEDITERRANEO</text><text x="74" y="343" font-size="5.6" text-anchor="middle" fill="#2a1a08" font-family="Georgia,serif" letter-spacing=".5">DELLE REPUBBLICHE</text><text x="74" y="351.5" font-size="5.6" text-anchor="middle" fill="#2a1a08" font-family="Georgia,serif" font-style="italic">marinare e degli imperi</text></g>
+<rect x="0" y="0" width="700" height="370" fill="url(#vg)"/>
+</g>
+<rect x="-14" y="-14" width="728" height="398" fill="url(#gr)"/>
+<rect x="-4" y="-4" width="708" height="378" fill="none" stroke="#bf6a20" stroke-width="8"/><rect x="0" y="0" width="700" height="370" fill="none" stroke="#4a260a" stroke-width=".9"/><rect x="-8" y="-8" width="716" height="386" fill="none" stroke="#4a260a" stroke-width=".7"/>`;
  return MAPB;
 }
-function shipIcon(x,y,sc,dir,name,z){
- return `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(sc*dir).toFixed(2)},${sc.toFixed(2)})"><path d="M-5,0L5,0L3.5,3L-3.5,3Z" fill="#6b4a25" stroke="#2b1c0a" stroke-width=".5"/><line x1="0" y1="0" x2="0" y2="-8.5" stroke="#2b1c0a" stroke-width=".6"/><path d="M.6,-8L5.2,-1L.6,-1Z" fill="#f6efd8" stroke="#2b1c0a" stroke-width=".4"/><path d="M-.6,-7L-4.2,-1.4L-.6,-1.4Z" fill="#efe6c6" stroke="#2b1c0a" stroke-width=".4"/><path d="M0,-8.5L3,-9.3L0,-10.1Z" fill="#e0b252"/></g>${z>=2?`<text x="${x.toFixed(1)}" y="${(y+7*sc+5).toFixed(1)}" font-size="${(6*sc).toFixed(1)}" text-anchor="middle" fill="#f6ecd0" stroke="#1a140a" stroke-width="${(1.5*sc).toFixed(1)}" paint-order="stroke" stroke-linejoin="round" font-family="Georgia,serif">${name}</text>`:''}`;
+function splitRoute(p,f){
+ let L=0;const d=[];
+ for(let i=1;i<p.length;i++){const l=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);d.push(l);L+=l}
+ let t=f*L;const a=[p[0]];
+ for(let i=0;i<d.length;i++){
+  if(t<=d[i]||i===d.length-1){const u=d[i]?Math.min(1,t/d[i]):1,q=[p[i][0]+(p[i+1][0]-p[i][0])*u,p[i][1]+(p[i+1][1]-p[i][1])*u];a.push(q);return [a,[q].concat(p.slice(i+1))]}
+  a.push(p[i+1]);t-=d[i];
+ }
+ return [p,[p[p.length-1]]];
+}
+const progOf=s=>Math.max(0,Math.min(1,(S.day-(s.st||0))/Math.max(1,s.arr-(s.st||0))));
+function shipIcon(x,y,sc,dir,col){
+ return `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(sc*dir).toFixed(2)},${sc.toFixed(2)})"><path d="M-5.5,.5L5.5,.5L4,3.4L-4,3.4Z" fill="#5b3d1e" stroke="#2a1a08" stroke-width=".5"/><line x1="-1.8" y1=".5" x2="-1.8" y2="-8.2" stroke="#2a1a08" stroke-width=".6"/><line x1="2" y1=".5" x2="2" y2="-6.6" stroke="#2a1a08" stroke-width=".6"/><path d="M-1.8,-7.6L-5.2,-1.2L-1.8,-1.2Z" fill="#f4ead0" stroke="#2a1a08" stroke-width=".4"/><path d="M2,-6.2L5.6,-1.2L2,-1.2Z" fill="#f4ead0" stroke="#2a1a08" stroke-width=".4"/><path d="M-1.8,-8.2L1.6,-9L-1.8,-9.8Z" fill="${col}" stroke="#2a1a08" stroke-width=".25"/></g>`;
 }
 function mapSvg(){
  const z=S.ui.mz||2,sc=2/z,sel=S.ui.mapSel,sh=S.ui.mapShip?S.ships.find(x=>x.id===S.ui.mapShip):null,lw=1.2*sc;
- const pos=c=>[MX(C[c][1]),MY(C[c][2])];
- const route=(rp,col,op)=>`<polyline points="${rpts(rp)}" fill="none" stroke="#1a140a" stroke-width="${(lw*2.4).toFixed(2)}" opacity=".35" stroke-linejoin="round" stroke-linecap="round"/><polyline points="${rpts(rp)}" fill="none" stroke="${col}" stroke-width="${lw.toFixed(2)}" stroke-dasharray="${(3*sc).toFixed(1)} ${(2.6*sc).toFixed(1)}" opacity="${op}" stroke-linejoin="round"/>`;
- let o=`<svg viewBox="0 0 700 370" style="width:${z*100}%;display:block;background:#0f4570">`+mapBase();
- if(sh&&sel&&sh.city!==sel)o+=route(routeXY(sh.city,sel),'#f6ecd0',1);
+ const lblA=`font-family="Georgia,serif" font-style="italic" stroke="#f4ead0" paint-order="stroke" stroke-linejoin="round"`;
+ const route=(rp,col,op)=>`<polyline points="${rpts(rp)}" fill="none" stroke="#f4ead0" stroke-width="${(lw*2.6).toFixed(2)}" opacity=".6" stroke-linejoin="round" stroke-linecap="round"/><polyline points="${rpts(rp)}" fill="none" stroke="${col}" stroke-width="${lw.toFixed(2)}" stroke-dasharray="${(3.2*sc).toFixed(1)} ${(2.4*sc).toFixed(1)}" opacity="${op}" stroke-linejoin="round"/>`;
+ let o=`<svg viewBox="-14 -14 728 398" style="width:${z*100}%;display:block;background:#efe3c4">`+mapBase();
+ if(sh&&sel&&sh.city!==sel)o+=route(routeXY(sh.city,sel),'#3a2c1a',1);
  let sg='';
- for(const s of S.ships)if(s.dest){
-  const rp=routeXY(s.city,s.dest),f=Math.max(0,Math.min(1,(S.day-(s.st||0))/Math.max(1,s.arr-(s.st||0)))),[x,y]=along(rp,f),[x2]=along(rp,Math.min(1,f+.04));
-  o+=route(rp,'#e0b252',.95);sg+=shipIcon(x,y,sc,x2>=x?1:-1,s.name,z);
- }
+ S.ships.forEach((s,i)=>{
+  if(!s.dest)return;
+  const col=SCOL[i%SCOL.length],rp=routeXY(s.city,s.dest),f=progOf(s),[dn,rm]=splitRoute(rp,f),[x,y]=dn[dn.length-1],[x2]=along(rp,Math.min(1,f+.04));
+  o+=`<polyline points="${rpts(dn)}" fill="none" stroke="#f4ead0" stroke-width="${(lw*3.4).toFixed(2)}" opacity=".7" stroke-linejoin="round" stroke-linecap="round"/><polyline points="${rpts(dn)}" fill="none" stroke="${col}" stroke-width="${(lw*1.7).toFixed(2)}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if(rm.length>1)o+=route(rm,col,.95);
+  const [ex,ey]=rp[rp.length-1];
+  o+=`<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="${(5.5*sc).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${(1.1*sc).toFixed(2)}"/>`;
+  sg+=shipIcon(x,y,sc,x2>=x?1:-1,col);
+  if(z>=2)sg+=`<text x="${x.toFixed(1)}" y="${(y+7*sc+6).toFixed(1)}" font-size="${(6.4*sc).toFixed(1)}" text-anchor="middle" fill="${col}" stroke-width="${(1.8*sc).toFixed(1)}" font-weight="700" ${lblA}>${s.name} · ${Math.max(0,s.arr-S.day)} g</text>`;
+ });
  for(const c of Object.keys(C)){
-  const [x,y]=pos(c),bl=blocked(c),n=S.ships.filter(s=>s.city===c&&!s.dest).length,col=FCOL[facOf(c)];
-  o+=`<g onclick="mapPick('${c}')" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${sc.toFixed(2)})"><circle r="10" fill="transparent"/>${c===sel?`<circle r="8" fill="rgba(246,215,106,.18)" stroke="#f6d76a" stroke-width="1.2" stroke-dasharray="2 1.5"/>`:''}${bl?`<circle r="6.6" fill="none" stroke="#ff4d4d" stroke-width="1"/>`:''}<path d="M-3.4,2.4L-3.4,-.6L0,-3.4L3.4,-.6L3.4,2.4Z" fill="#efe2b8" stroke="#2b2110" stroke-width=".6"/><rect x="-.8" y=".4" width="1.6" height="2" fill="#5a4a2a"/><line x1="0" y1="-3.4" x2="0" y2="-9" stroke="#2b2110" stroke-width=".6"/><path d="M0,-9L5,-7.6L0,-6.2Z" fill="${col}" stroke="#2b2110" stroke-width=".4"/>${bl?`<path d="M-3.6,-3.6L3.6,3.6M3.6,-3.6L-3.6,3.6" stroke="#ff4d4d" stroke-width="1.4"/>`:''}${n?`<circle cx="6.6" cy="-1.5" r="3.3" fill="#f6efd8" stroke="#2b1c0a" stroke-width=".5"/><text x="6.6" y=".1" font-size="4.8" text-anchor="middle" fill="#1a140a" font-weight="700">${n}</text>`:''}${(z>=2||c===sel)?`<text y="${bl?10.5:8.8}" font-size="${c===sel?7.6:6.4}" text-anchor="middle" fill="${c===sel?'#ffe28a':'#f6ecd0'}" stroke="#1a140a" stroke-width="1.7" paint-order="stroke" stroke-linejoin="round" font-family="Georgia,serif">${c}</text>`:''}</g>`;
+  const x=MX(C[c][1]),y=MY(C[c][2]),bl=blocked(c),n=S.ships.filter(s=>s.city===c&&!s.dest).length,col=FCOL[facOf(c)];
+  o+=`<g onclick="mapPick('${c}')" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${sc.toFixed(2)})"><circle r="10" fill="transparent"/>${c===sel?`<circle r="8.4" fill="rgba(191,106,32,.2)" stroke="#bf6a20" stroke-width="1.2" stroke-dasharray="2 1.5"/>`:''}${bl?`<circle r="6.8" fill="none" stroke="#c0281a" stroke-width="1"/>`:''}<path d="M-3.2,2.6L-3.2,-1.6L-2.1,-1.6L-2.1,-.5L-.7,-.5L-.7,-1.6L.7,-1.6L.7,-.5L2.1,-.5L2.1,-1.6L3.2,-1.6L3.2,2.6Z" fill="${col}" stroke="#2a1a08" stroke-width=".65"/><rect x="-.7" y=".8" width="1.4" height="1.8" fill="#2a1a08"/>${bl?`<path d="M-3.8,-3.8L3.8,3.8M3.8,-3.8L-3.8,3.8" stroke="#c0281a" stroke-width="1.4"/>`:''}${n?`<circle cx="6.4" cy="-2" r="3.2" fill="#f4ead0" stroke="#2a1a08" stroke-width=".5"/><text x="6.4" y="-.4" font-size="4.8" text-anchor="middle" fill="#2a1a08" font-weight="700">${n}</text>`:''}${(z>=2||c===sel)?`<text y="${bl?10.8:8.6}" font-size="${c===sel?7.8:6.6}" text-anchor="middle" fill="${c===sel?'#8a3a08':'#2a1a08'}" stroke-width="1.8" font-weight="${c===sel?700:400}" ${lblA}>${c}</text>`:''}</g>`;
  }
  return o+sg+'</svg>';
+}
+function transitList(){
+ const mv=S.ships.map((s,i)=>[s,i]).filter(([s])=>s.dest);
+ if(!mv.length)return `<div class="card"><small>Nessuna delle tue navi è in viaggio.</small></div>`;
+ return `<div class="card"><b>Le tue navi in viaggio</b>`+mv.map(([s,i])=>{const col=SCOL[i%SCOL.length];return `<div style="margin-top:10px" onclick="mapFocus(${s.id})"><div class="r"><span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></i><b>${s.name}</b></span><span class="m">${s.city} → ${s.dest}</span></div><div class="pb"><i style="width:${Math.round(progOf(s)*100)}%;background:${col}"></i></div><small>Arrivo al giorno ${s.arr} (tra ${gg(Math.max(0,s.arr-S.day))}) · tocca per seguirla sulla mappa</small></div>`}).join('')+`</div>`;
 }
 function mapPanel(){
  const c=S.ui.mapSel;
@@ -737,7 +785,7 @@ function mapPanel(){
  const free=S.ships.filter(s=>!s.dest&&s.city!==c),there=S.ships.filter(s=>s.city===c&&!s.dest),moving=S.ships.filter(s=>s.dest),sel=S.ui.mapShip;
  return `<div class="card"><div class="r"><b>${c}</b><span class="m">${C[c][0]}</span></div>
  <small>${blocked(c)?'⛔ '+blkMsg(c)+'<br>':''}Abitanti ${fmt(S.popu[c]*1000)} · popolarità ${(S.pop[c]||0).toFixed(0)}${there.length?'<br>Tue navi qui: '+there.map(s=>s.name).join(', '):''}</small>
- ${free.length?`<div style="margin-top:8px"><small>Quale nave mandare?</small></div>`+free.map(s=>`<div class="card" style="margin:6px 0;${sel===s.id?'border-color:var(--gold);background:#1d3a4d':''}" onclick="mapShipPick(${s.id})"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><small>Da ${s.city}: ${days(s.city,c,s)} giorni (${nm(s.city,c)} mn)${blocked(s.city)?' · alla fonda':''}</small></div>`).join(''):'<br><small>Nessuna nave libera da mandare qui.</small>'}
+ ${free.length?`<div style="margin-top:8px"><small>Quale nave mandare?</small></div>`+free.map(s=>`<div class="card" style="margin:6px 0;${sel===s.id?'border-color:var(--gold);background:#1d3a4d':''}" onclick="mapShipPick(${s.id})"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><small>Da ${s.city}: ${gg(days(s.city,c,s))} (${nm(s.city,c)} mn)${blocked(s.city)?' · alla fonda':''}</small></div>`).join(''):'<br><small>Nessuna nave libera da mandare qui.</small>'}
  <div class="b"><button onclick="mapGo()" ${sel&&free.some(s=>s.id===sel)?'':'disabled'}>OK, salpa per ${c}</button><button onclick="mapOpen()">Apri porto</button></div>
  ${moving.length?`<small>In viaggio: ${moving.map(s=>`${s.name} → ${s.dest} (arrivo giorno ${s.arr})`).join(' · ')}</small>`:''}</div>`;
 }
@@ -751,7 +799,7 @@ inizio(){
 mappa(){
  const z=S.ui.mz||2;
  const leg=Object.keys(FAC).map(f=>`<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><i style="width:9px;height:9px;border-radius:50%;background:${FCOL[f]};display:inline-block"></i><small>${FAC[f]}</small></span>`).join('');
- return `<h2>Mappa</h2><div class="b" style="margin:0 0 8px"><button onclick="mapZoom(-1)" ${z<=1?'disabled':''}>−</button><button onclick="mapZoom(1)" ${z>=4?'disabled':''}>+</button></div><div id="mapbox" style="overflow:auto;max-height:55vh;border:1px solid var(--line);border-radius:10px">${mapSvg()}</div><div style="margin:8px 0">${leg}</div>${mapPanel()}`;
+ return `<h2>Mappa</h2><div class="b" style="margin:0 0 8px"><button onclick="mapZoom(-1)" ${z<=1?'disabled':''}>−</button><button onclick="mapZoom(1)" ${z>=4?'disabled':''}>+</button></div><div id="mapbox" style="overflow:auto;max-height:55vh;border:1px solid var(--line);border-radius:10px">${mapSvg()}</div>${transitList()}<div style="margin:8px 0">${leg}</div>${mapPanel()}`;
 },
 porto(){
  const u=S.ui,c=u.city,sh=curShip(),arr=sh?sh.cargo:S.dep[c];
@@ -779,9 +827,9 @@ navi(){
  return `<h2>Navi</h2><small>Quantità per carico e scarico:</small><div class="b" style="margin:4px 0 10px">${q}</div>`+(S.ships.map(s=>{
   const cg=G.map((g,i)=>s.cargo[i]?`${g} ${s.cargo[i]} (≈${avgOf(cb(s)[i],s.cargo[i]).toFixed(1)} ₯)`:'').filter(Boolean).join(', ')||'vuota';
   const a=s.dest
-   ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${s.arr-S.day} giorni)`
+   ?`In rotta per <b>${s.dest}</b>. Arrivo al giorno ${s.arr} (tra ${gg(s.arr-S.day)})<div class="b"><button onclick="mapFocus(${s.id})">Mostra sulla mappa</button></div>`
    :`${blocked(s.city)?'Alla fonda davanti a':'Ormeggiata a'} <b>${s.city}</b>${blocked(s.city)?' (porto bloccato)':''}
-   <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).sort((x,y)=>days(s.city,x,s)-days(s.city,y,s)).map(x=>`<option value="${x}">${x} · ${days(s.city,x,s)} giorni</option>`).join('')}</select>
+   <select id="d${s.id}">${Object.keys(C).filter(x=>x!==s.city).sort((x,y)=>days(s.city,x,s)-days(s.city,y,s)).map(x=>`<option value="${x}">${x} · ${gg(days(s.city,x,s))}</option>`).join('')}</select>
    <div class="b"><button onclick="sail(${s.id})">Salpa</button><button onclick="S.ui.city='${s.city}';S.ui.store=${s.id};go('porto')">Compra e vendi</button></div>${lo(s)}`;
   return `<div class="card"><div class="r"><b>${s.name}</b><span class="m">${s.type} · ${tot(s.cargo)}/${T[s.type].cap}</span></div><div>${a}</div><small>Carico: ${cg} · Cannoni ${s.arm||0}/6 · Armi ${s.wp||0}/3 · Scafo ${Math.round(hp(s))}%</small>${s.route?`<br><small>Rotta automatica: ${s.route.a} ⇄ ${s.route.b}${s.wait?' (in attesa: porto bloccato)':''}</small>`:''}</div>`;
  }).join('')||'<p>Non hai navi. Compra una nave al Cantiere.</p>');
@@ -841,7 +889,7 @@ function render(keep){
  const sv=[...document.querySelectorAll('#main select')].map(s=>s.value);
  const mb=document.getElementById('mapbox');if(mb)mapScroll=[mb.scrollLeft,mb.scrollTop];
  $('#main').innerHTML=S.started?P[u.tab]():P.inizio();
- const mb2=document.getElementById('mapbox');if(mb2){if(mapScroll===null)mapCenter(S.ui.mapSel||(S.ships[0]&&S.ships[0].city)||S.home);else{mb2.scrollLeft=mapScroll[0];mb2.scrollTop=mapScroll[1]}}
+ const mb2=document.getElementById('mapbox');if(mb2){if(mapScroll===null){if(mapFocusPt){mapCenterXY(mapFocusPt[0],mapFocusPt[1]);mapFocusPt=null}else mapCenter(S.ui.mapSel||(S.ships[0]&&S.ships[0].city)||S.home)}else{mb2.scrollLeft=mapScroll[0];mb2.scrollTop=mapScroll[1]}}
  if(keep)[...document.querySelectorAll('#main select')].forEach((s,i)=>{if(sv[i]!==undefined&&[...s.options].some(o=>o.value===sv[i]||o.text===sv[i]))s.value=sv[i]});
 }
 render();
